@@ -67,6 +67,9 @@ const MetricCard = ({
 
   const statusBadgeClass = getStatusBadgeClass(status);
 
+  // Check if there's data to display
+  const hasData = data && data.length > 0;
+
   const chartOptions = {
     chart: {
       type: "area" as const,
@@ -134,7 +137,7 @@ const MetricCard = ({
   const chartSeries = [
     {
       name: title,
-      data: data,
+      data: hasData ? data : [0], // Provide at least one value for empty charts
     },
   ];
 
@@ -152,7 +155,9 @@ const MetricCard = ({
       height: 350,
     },
     xaxis: {
-      categories: Array.from({ length: data.length }, (_, i) => `Day ${i + 1}`),
+      categories: hasData 
+        ? Array.from({ length: data.length }, (_, i) => `Day ${i + 1}`) 
+        : ["No Data"],
       labels: {
         show: true,
       },
@@ -205,7 +210,7 @@ const MetricCard = ({
             <span className="text-2xl font-bold">{value}</span>
             {unit && <span className="text-sm text-muted-foreground">{unit}</span>}
           </div>
-          {statusText && (
+          {statusText && statusText !== "-" && (
             <Badge 
               variant={badgeVariant} 
               className={`mt-1 ${statusBadgeClass}`}
@@ -218,13 +223,19 @@ const MetricCard = ({
         <CardFooter className="pt-2 pb-1 px-2">
           <div className="w-full h-16">
             {typeof window !== "undefined" && (
-              <Chart
-                options={chartOptions}
-                series={chartSeries}
-                type="area"
-                height="100%"
-                width="100%"
-              />
+              hasData ? (
+                <Chart
+                  options={chartOptions}
+                  series={chartSeries}
+                  type="area"
+                  height="100%"
+                  width="100%"
+                />
+              ) : (
+                <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
+                  No data available
+                </div>
+              )
             )}
           </div>
         </CardFooter>
@@ -235,19 +246,25 @@ const MetricCard = ({
           <DialogHeader>
             <DialogTitle>{title} Details</DialogTitle>
             <DialogDescription>
-              View historical data and add new measurements
+              {hasData ? "View historical data and add new measurements" : "No historical data available. Add your first measurement below."}
             </DialogDescription>
           </DialogHeader>
           
           <div className="h-[350px] my-4">
             {typeof window !== "undefined" && isModalOpen && (
-              <Chart
-                options={modalChartOptions}
-                series={chartSeries}
-                type="area"
-                height="100%"
-                width="100%"
-              />
+              hasData ? (
+                <Chart
+                  options={modalChartOptions}
+                  series={chartSeries}
+                  type="area"
+                  height="100%"
+                  width="100%"
+                />
+              ) : (
+                <div className="flex items-center justify-center h-full text-muted-foreground">
+                  No historical data available
+                </div>
+              )
             )}
           </div>
           

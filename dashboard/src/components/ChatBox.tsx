@@ -1,37 +1,22 @@
-import React from "react";
+import React, { useState } from "react";
 import ChatMessage from "@/components/ChatMessage";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Send } from "lucide-react";
-
-interface ChatMessage {
-  message: string;
-  timestamp: string;
-  isUser: boolean;
-  senderName?: string;
-}
+import { useChatMessages } from "@/hooks";
 
 const ChatBox = () => {
-  // Chat messages
-  const chatMessages = [
-    {
-      message: "Hi, Doctor. I've been having frequent headaches, mostly in the morning.",
-      timestamp: "12:00 PM",
-      isUser: true,
-    },
-    {
-      message: "I see. On a scale of 1 to 10, how severe are the headaches?",
-      timestamp: "12:10 PM",
-      isUser: false,
-      senderName: "Dr. Darrell Steward",
-    },
-    {
-      message: "About a 7 or 8. Very painful.",
-      timestamp: "12:15 PM",
-      isUser: true,
-    },
-  ];
+  const { messages, loading, sending, error, sendMessage } = useChatMessages();
+  const [newMessage, setNewMessage] = useState("");
+
+  // Handle sending a new message
+  const handleSendMessage = async () => {
+    if (!newMessage.trim()) return;
+    
+    await sendMessage(newMessage);
+    setNewMessage("");
+  };
 
   return (
     <div className="flex flex-col bg-background border rounded-lg shadow-sm h-[420px]">
@@ -41,25 +26,51 @@ const ChatBox = () => {
       
       <ScrollArea className="flex-1 p-4">
         <div className="space-y-4">
-          {chatMessages.map((msg, i) => (
-            <ChatMessage
-              key={i}
-              message={msg.message}
-              timestamp={msg.timestamp}
-              isUser={msg.isUser}
-              senderName={msg.senderName}
-            />
-          ))}
+          {loading ? (
+            <div className="flex justify-center p-4">
+              <div className="animate-spin h-4 w-4 border-2 border-primary border-t-transparent rounded-full"></div>
+            </div>
+          ) : error ? (
+            <p className="text-red-500 text-center">{error}</p>
+          ) : messages.length === 0 ? (
+            <p className="text-center text-muted-foreground">No messages yet. Start a conversation!</p>
+          ) : (
+            messages.map((msg) => (
+              <ChatMessage
+                key={msg.id}
+                message={msg.message}
+                timestamp={msg.timestamp}
+                isUser={msg.isUser}
+                senderName={msg.senderName}
+              />
+            ))
+          )}
         </div>
       </ScrollArea>
       
       <div className="p-4 border-t mt-auto">
-        <div className="flex gap-2">
-          <Input placeholder="Type your message..." className="flex-1" />
-          <Button size="icon">
+        <form 
+          className="flex gap-2" 
+          onSubmit={(e) => {
+            e.preventDefault();
+            handleSendMessage();
+          }}
+        >
+          <Input 
+            placeholder="Type your message..." 
+            className="flex-1 text-foreground" 
+            value={newMessage}
+            onChange={(e) => setNewMessage(e.target.value)}
+            disabled={loading}
+          />
+          <Button 
+            type="submit" 
+            size="icon" 
+            disabled={loading || !newMessage.trim() || sending}
+          >
             <Send className="h-4 w-4" />
           </Button>
-        </div>
+        </form>
       </div>
     </div>
   );

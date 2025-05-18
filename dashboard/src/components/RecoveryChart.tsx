@@ -40,6 +40,19 @@ const RecoveryChart: React.FC<RecoveryChartProps> = ({ data }) => {
   const textColor = theme === 'dark' ? '#e2e8f0' : '#1e293b';
   const gridColor = theme === 'dark' ? 'rgba(200, 200, 200, 0.1)' : 'rgba(0, 0, 0, 0.1)';
   
+  // Check if there's data to display
+  const hasData = data.labels && data.labels.length > 0 && 
+                  data.datasets && data.datasets.some(dataset => dataset.data.length > 0);
+  
+  // If no data, create a placeholder dataset
+  const chartData = hasData ? data : {
+    labels: ['No Data'],
+    datasets: data.datasets.map(ds => ({
+      ...ds,
+      data: [0]
+    }))
+  };
+  
   const options = {
     responsive: true,
     maintainAspectRatio: false,
@@ -93,7 +106,13 @@ const RecoveryChart: React.FC<RecoveryChartProps> = ({ data }) => {
       </CardHeader>
       <CardContent className="p-0">
         <div className="h-72 w-full">
-          <Line data={data} options={options} />
+          {hasData ? (
+            <Line data={chartData} options={options} />
+          ) : (
+            <div className="flex items-center justify-center h-full text-muted-foreground">
+              No recovery data available yet
+            </div>
+          )}
         </div>
       </CardContent>
     </Card>

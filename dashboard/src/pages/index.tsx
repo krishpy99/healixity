@@ -13,46 +13,11 @@ import {
   Gauge,
   BarChart,
 } from "lucide-react";
+import { useDashboardData } from "@/hooks";
 
 export default function Dashboard() {
-  // Sample data for metrics
-  const heartRateData = [75, 72, 78, 71, 73, 76, 70, 74, 72, 75, 71, 69];
-  const bloodPressureData = [120, 118, 122, 119, 121, 120, 118, 120, 119, 121];
-  const bmiData = [24.3, 24.4, 24.5, 24.5, 24.4, 24.5, 24.6, 24.5, 24.4, 24.5];
-  const spo2Data = [98, 97, 98, 98, 97, 98, 99, 98, 98, 97, 98, 99, 98];
-  const temperatureData = [98.4, 98.5, 98.6, 98.5, 98.6, 98.7, 98.6, 98.5, 98.6, 98.7];
-  const bloodSugarData = [94, 96, 93, 95, 97, 94, 96, 95, 93, 95, 96, 94, 95];
-
-  // Recovery chart data
-  const recoveryChartData = {
-    labels: ["Feb 10", "Feb 11", "Feb 12", "Feb 13", "Feb 14", "Feb 15", "Feb 16"],
-    datasets: [
-      {
-        label: "Pain Level (1-10)",
-        data: [65, 55, 45, 40, 45, 35, 30],
-        borderColor: "#ff6384",
-        backgroundColor: "rgba(255, 99, 132, 0.1)",
-      },
-      {
-        label: "Mobility (%)",
-        data: [30, 40, 55, 70, 65, 80, 90],
-        borderColor: "#4bc0c0",
-        backgroundColor: "rgba(75, 192, 192, 0.1)",
-      },
-      {
-        label: "Medication (mg)",
-        data: [100, 90, 80, 70, 80, 60, 50],
-        borderColor: "#36a2eb",
-        backgroundColor: "rgba(54, 162, 235, 0.1)",
-      },
-      {
-        label: "Energy Level (1-10)",
-        data: [30, 45, 55, 60, 55, 70, 80],
-        borderColor: "#9966ff",
-        backgroundColor: "rgba(153, 102, 255, 0.1)",
-      },
-    ],
-  };
+  // Use our composite hook that combines all dashboard data
+  const { metrics, recoveryChartData, loading, error } = useDashboardData();
 
   return (
     <div className="min-h-screen bg-background p-4 md:p-6">
@@ -71,85 +36,102 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Main grid layout */}
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
-          {/* Health Metrics */}
-          <div className="md:col-span-6 lg:col-span-8 grid grid-cols-2 md:grid-cols-3 gap-4">
-            <MetricCard
-              title="Heart Rate"
-              value="72"
-              unit="bpm"
-              status="normal"
-              statusText="Resting"
-              data={heartRateData}
-              color="#ef4444"
-              icon={<Heart className="h-4 w-4 text-red-500" />}
-            />
-            <MetricCard
-              title="Blood Pressure"
-              value="120/80"
-              status="normal"
-              statusText="Healthy"
-              data={bloodPressureData}
-              color="#3b82f6"
-              icon={<Activity className="h-4 w-4 text-blue-500" />}
-            />
-            <MetricCard
-              title="BMI"
-              value="24.5"
-              status="warning"
-              statusText="Slight increase"
-              data={bmiData}
-              color="#8b5cf6"
-              icon={<Gauge className="h-4 w-4 text-purple-500" />}
-            />
-            <MetricCard
-              title="SpO2"
-              value="98"
-              unit="%"
-              status="normal"
-              statusText="Healthy"
-              data={spo2Data}
-              color="#10b981"
-              icon={<Droplet className="h-4 w-4 text-green-500" />}
-            />
-            <MetricCard
-              title="Temperature"
-              value="98.6"
-              unit="°F"
-              status="normal"
-              statusText="Healthy"
-              data={temperatureData}
-              color="#f59e0b"
-              icon={<Thermometer className="h-4 w-4 text-amber-500" />}
-            />
-            <MetricCard
-              title="Blood Sugar"
-              value="95"
-              unit="mg/dL"
-              status="normal"
-              statusText="Stable"
-              data={bloodSugarData}
-              color="#3b82f6"
-              icon={<Droplet className="h-4 w-4 text-blue-500" />}
-            />
+        {loading ? (
+          <div className="flex items-center justify-center p-10">
+            <div className="text-center">
+              <div className="animate-spin h-8 w-8 border-2 border-primary border-t-transparent rounded-full mx-auto mb-4"></div>
+              <p>Loading dashboard data...</p>
+            </div>
           </div>
+        ) : error ? (
+          <div className="bg-red-50 text-red-800 p-4 rounded-md">
+            {error}
+          </div>
+        ) : (
+          /* Main grid layout */
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+            {/* Health Metrics */}
+            <div className="md:col-span-6 lg:col-span-8 grid grid-cols-2 md:grid-cols-3 gap-4">
+              {metrics && (
+                <>
+                  <MetricCard
+                    title="Heart Rate"
+                    value={metrics.heartRate.current}
+                    unit={metrics.heartRate.unit}
+                    status={metrics.heartRate.status}
+                    statusText={metrics.heartRate.statusText}
+                    data={metrics.heartRate.data}
+                    color={metrics.heartRate.color}
+                    icon={<Heart className="h-4 w-4 text-red-500" />}
+                  />
+                  <MetricCard
+                    title="Blood Pressure"
+                    value={metrics.bloodPressure.current}
+                    status={metrics.bloodPressure.status}
+                    statusText={metrics.bloodPressure.statusText}
+                    data={metrics.bloodPressure.data}
+                    color={metrics.bloodPressure.color}
+                    icon={<Activity className="h-4 w-4 text-blue-500" />}
+                  />
+                  <MetricCard
+                    title="BMI"
+                    value={metrics.bmi.current}
+                    status={metrics.bmi.status}
+                    statusText={metrics.bmi.statusText}
+                    data={metrics.bmi.data}
+                    color={metrics.bmi.color}
+                    icon={<Gauge className="h-4 w-4 text-purple-500" />}
+                  />
+                  <MetricCard
+                    title="SpO2"
+                    value={metrics.spo2.current}
+                    unit={metrics.spo2.unit}
+                    status={metrics.spo2.status}
+                    statusText={metrics.spo2.statusText}
+                    data={metrics.spo2.data}
+                    color={metrics.spo2.color}
+                    icon={<Droplet className="h-4 w-4 text-green-500" />}
+                  />
+                  <MetricCard
+                    title="Temperature"
+                    value={metrics.temperature.current}
+                    unit={metrics.temperature.unit}
+                    status={metrics.temperature.status}
+                    statusText={metrics.temperature.statusText}
+                    data={metrics.temperature.data}
+                    color={metrics.temperature.color}
+                    icon={<Thermometer className="h-4 w-4 text-amber-500" />}
+                  />
+                  <MetricCard
+                    title="Blood Sugar"
+                    value={metrics.bloodSugar.current}
+                    unit={metrics.bloodSugar.unit}
+                    status={metrics.bloodSugar.status}
+                    statusText={metrics.bloodSugar.statusText}
+                    data={metrics.bloodSugar.data}
+                    color={metrics.bloodSugar.color}
+                    icon={<Droplet className="h-4 w-4 text-blue-500" />}
+                  />
+                </>
+              )}
+            </div>
 
-          {/* Chat Box Component */}
-          <div className="md:col-span-6 lg:col-span-4">
-            <ChatBox />
-          </div>
+            {/* Chat Box Component */}
+            <div className="md:col-span-6 lg:col-span-4">
+              <ChatBox />
+            </div>
 
-          {/* Recovery Tracker */}
-          <div className="md:col-span-8">
-            <RecoveryChart data={recoveryChartData} />
-          </div>
+            {/* Recovery Tracker */}
+            <div className="md:col-span-8">
+              {recoveryChartData && <RecoveryChart data={recoveryChartData} />}
+            </div>
 
-          {/* Document Upload Section */}
-          <div className="md:col-span-4">
-            <DocumentUpload />
+            {/* Document Upload Section */}
+            <div className="md:col-span-4">
+              <DocumentUpload />
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );

@@ -4,68 +4,28 @@ import { FileInput } from "./ui/file-input";
 import { Button } from "./ui/button";
 import { Alert, AlertDescription } from "./ui/alert";
 import { Loader2, CheckCircle, FileText } from "lucide-react";
-
-interface Document {
-  id: string;
-  name: string;
-  type: string;
-  size: number;
-  uploadedAt: Date;
-}
+import { useDocuments } from "@/hooks";
 
 const DocumentUpload: React.FC = () => {
+  const { 
+    documents, 
+    loading, 
+    uploading, 
+    error, 
+    uploadSuccess, 
+    uploadDocument 
+  } = useDocuments();
+  
   const [file, setFile] = useState<File | null>(null);
-  const [isUploading, setIsUploading] = useState(false);
-  const [uploadSuccess, setUploadSuccess] = useState(false);
-  const [documents, setDocuments] = useState<Document[]>([
-    {
-      id: "1",
-      name: "Medical_Report_2023.pdf",
-      type: "application/pdf",
-      size: 2500000,
-      uploadedAt: new Date(2023, 4, 15),
-    },
-    {
-      id: "2",
-      name: "Blood_Test_Results.pdf",
-      type: "application/pdf",
-      size: 1200000,
-      uploadedAt: new Date(2023, 4, 10),
-    },
-    {
-      id: "3",
-      name: "Vaccination_Certificate.pdf",
-      type: "application/pdf",
-      size: 980000,
-      uploadedAt: new Date(2023, 3, 22),
-    },
-  ]);
 
   const handleFileChange = (selectedFile: File | null) => {
     setFile(selectedFile);
-    setUploadSuccess(false);
   };
 
-  const handleUpload = () => {
+  const handleUpload = async () => {
     if (!file) return;
-
-    setIsUploading(true);
-
-    // Simulate upload
-    setTimeout(() => {
-      const newDocument: Document = {
-        id: Date.now().toString(),
-        name: file.name,
-        type: file.type,
-        size: file.size,
-        uploadedAt: new Date(),
-      };
-
-      setDocuments((prev) => [newDocument, ...prev]);
-      setIsUploading(false);
-      setUploadSuccess(true);
-      setFile(null);
-    }, 2000);
+    await uploadDocument(file);
+    setFile(null);
   };
 
   // Format file size
@@ -76,7 +36,8 @@ const DocumentUpload: React.FC = () => {
   };
 
   // Format date
-  const formatDate = (date: Date) => {
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
     return date.toLocaleDateString("en-US", {
       year: "numeric",
       month: "short",
@@ -105,10 +66,14 @@ const DocumentUpload: React.FC = () => {
             <Button 
               type="submit" 
               className="w-full mt-2"
-              disabled={!file || isUploading}
-              onClick={handleUpload}
+              disabled={!file || uploading}
             >
-              {isUploading ? "Uploading..." : "Upload Document"}
+              {uploading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Uploading...
+                </>
+              ) : "Upload Document"}
             </Button>
           </form>
         </div>
@@ -123,26 +88,36 @@ const DocumentUpload: React.FC = () => {
         <div>
           <h3 className="text-sm font-medium mb-2">Recently Uploaded</h3>
           <div className="space-y-2 max-h-[240px] overflow-y-auto pr-2">
-            {documents.map((doc) => (
-              <div
-                key={doc.id}
-                className="flex items-center p-2 border rounded-md bg-muted/30"
-              >
-                <FileText className="h-8 w-8 text-blue-500 mr-3 flex-shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">{doc.name}</p>
-                  <div className="flex text-xs text-muted-foreground">
-                    <span className="truncate mr-2">
-                      {formatFileSize(doc.size)}
-                    </span>
-                    <span>{formatDate(doc.uploadedAt)}</span>
-                  </div>
-                </div>
-                <Button variant="ghost" size="sm" className="flex-shrink-0">
-                  View
-                </Button>
+            {loading ? (
+              <div className="flex justify-center p-4">
+                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
               </div>
-            ))}
+            ) : error ? (
+              <p className="text-red-500 text-center text-sm">{error}</p>
+            ) : documents.length === 0 ? (
+              <p className="text-center text-muted-foreground text-sm">No documents uploaded yet.</p>
+            ) : (
+              documents.map((doc) => (
+                <div
+                  key={doc.id}
+                  className="flex items-center p-2 border rounded-md bg-muted/30"
+                >
+                  <FileText className="h-8 w-8 text-blue-500 mr-3 flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{doc.name}</p>
+                    <div className="flex text-xs text-muted-foreground">
+                      <span className="truncate mr-2">
+                        {formatFileSize(doc.size)}
+                      </span>
+                      <span>{formatDate(doc.uploadedAt)}</span>
+                    </div>
+                  </div>
+                  <Button variant="ghost" size="sm" className="flex-shrink-0">
+                    View
+                  </Button>
+                </div>
+              ))
+            )}
           </div>
         </div>
       </CardContent>
