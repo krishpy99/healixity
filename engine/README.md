@@ -90,6 +90,9 @@ Create a `.env` file in the root directory:
 PORT=8080
 ENVIRONMENT=development
 
+# Test Mode (for development/testing only)
+TEST_MODE=false
+
 # JWT Configuration
 JWT_SECRET=your_super_secret_jwt_key_here
 
@@ -280,6 +283,27 @@ CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o health-dashboard-back
 # Build Docker image
 docker build -t health-dashboard-backend .
 ```
+
+### Test Mode
+
+For development and testing, you can enable test mode to bypass authentication:
+
+```bash
+# Enable test mode
+TEST_MODE=true go run ./cmd/server/main.go
+```
+
+When test mode is enabled:
+- All authentication is bypassed
+- User ID is automatically set to "test"
+- All protected endpoints become accessible without auth headers
+- Server logs will show a warning that test mode is active
+
+**⚠️ Never enable test mode in production!**
+
+See [docs/test-mode.md](docs/test-mode.md) for detailed documentation.
+
+Try the example: `./examples/test-mode-example.sh`
 
 ## Deployment
 

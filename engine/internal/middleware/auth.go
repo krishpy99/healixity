@@ -8,6 +8,8 @@ import (
 	clerkhttp "github.com/clerk/clerk-sdk-go/v2/http"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
+
+	"health-dashboard-backend/internal/config"
 )
 
 // InitClerk initializes the Clerk client with the secret key
@@ -224,4 +226,54 @@ func AuthenticateWebSocket(conn *websocket.Conn, secretKey string) error {
 	// The token should be passed as a query parameter or in the handshake
 	// Implementation depends on how you want to handle WebSocket authentication with Clerk
 	return nil // Placeholder implementation
+}
+
+// TestAuth middleware that bypasses authentication in test mode
+func TestAuth(cfg *config.Config) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if cfg.TestMode {
+			// In test mode, automatically set user_id to "test"
+			c.Set("user_id", "test")
+			c.Set("authenticated", true)
+			c.Set("test_mode", true)
+			c.Next()
+			return
+		}
+		// If not in test mode, continue to next middleware (should be normal auth)
+		c.Next()
+	}
+}
+
+// RequireAuthWithTestMode wraps RequireAuth but allows test mode bypass
+func RequireAuthWithTestMode(cfg *config.Config) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if cfg.TestMode {
+			// In test mode, automatically set user_id to "test"
+			c.Set("user_id", "test")
+			c.Set("authenticated", true)
+			c.Set("test_mode", true)
+			c.Next()
+			return
+		}
+
+		// If not in test mode, use normal Clerk authentication
+		RequireAuth()(c)
+	}
+}
+
+// ClerkAuthWithTestMode wraps ClerkAuth but allows test mode bypass
+func ClerkAuthWithTestMode(cfg *config.Config) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if cfg.TestMode {
+			// In test mode, automatically set user_id to "test"
+			c.Set("user_id", "test")
+			c.Set("authenticated", true)
+			c.Set("test_mode", true)
+			c.Next()
+			return
+		}
+
+		// If not in test mode, use normal Clerk authentication
+		ClerkAuth()(c)
+	}
 }

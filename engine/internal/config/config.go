@@ -13,6 +13,7 @@ type Config struct {
 	Port        string
 	Environment string
 	JWTSecret   string
+	TestMode    bool // Add test mode flag
 
 	// Clerk configuration
 	ClerkSecretKey      string
@@ -58,6 +59,7 @@ func Load() (*Config, error) {
 		Port:        getEnv("PORT", "8080"),
 		Environment: getEnv("ENVIRONMENT", "development"),
 		JWTSecret:   getEnv("JWT_SECRET", "your-secret-key"),
+		TestMode:    getEnvAsBool("TEST_MODE", false), // Add test mode configuration
 
 		// Clerk configuration
 		ClerkSecretKey:      getEnv("CLERK_SECRET_KEY", ""),
@@ -129,6 +131,16 @@ func getEnvAsFloat32(key string, fallback float32) float32 {
 	if value := os.Getenv(key); value != "" {
 		if float32Val, err := strconv.ParseFloat(value, 32); err == nil {
 			return float32(float32Val)
+		}
+	}
+	return fallback
+}
+
+// getEnvAsBool gets environment variable as bool with fallback
+func getEnvAsBool(key string, fallback bool) bool {
+	if value := os.Getenv(key); value != "" {
+		if boolVal, err := strconv.ParseBool(value); err == nil {
+			return boolVal
 		}
 	}
 	return fallback

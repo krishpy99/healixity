@@ -92,36 +92,44 @@ func main() {
 	{
 		// Auth routes (with optional auth for checking status)
 		auth := api.Group("/auth")
-		auth.Use(middleware.ClerkAuth())
+		auth.Use(middleware.ClerkAuthWithTestMode(cfg))
 		{
 			auth.GET("/check", authHandler.CheckAuth)
-			auth.GET("/me", middleware.RequireAuth(), authHandler.GetCurrentUser)
-			auth.PUT("/profile", middleware.RequireAuth(), authHandler.UpdateProfile)
-			auth.GET("/roles", middleware.RequireAuth(), authHandler.GetUserRoles)
-			auth.PUT("/roles", middleware.RequireAuth(), authHandler.UpdateUserRoles)
+			auth.GET("/me", middleware.RequireAuthWithTestMode(cfg), authHandler.GetCurrentUser)
+			auth.PUT("/profile", middleware.RequireAuthWithTestMode(cfg), authHandler.UpdateProfile)
+			auth.GET("/roles", middleware.RequireAuthWithTestMode(cfg), authHandler.GetUserRoles)
+			auth.PUT("/roles", middleware.RequireAuthWithTestMode(cfg), authHandler.UpdateUserRoles)
 		}
 
 		// Health data endpoints
 		healthRoutes := api.Group("/health")
-		healthRoutes.Use(middleware.RequireAuth())
+		healthRoutes.Use(middleware.RequireAuthWithTestMode(cfg))
 		{
 			healthRoutes.POST("/metrics", healthHandler.AddHealthData)
 			healthRoutes.GET("/metrics/:type", healthHandler.GetMetricHistory)
 			healthRoutes.GET("/latest", healthHandler.GetLatestMetrics)
+			healthRoutes.GET("/summary", healthHandler.GetHealthSummary)
+			healthRoutes.GET("/trends", healthHandler.GetHealthTrends)
+			healthRoutes.GET("/supported-metrics", healthHandler.GetSupportedMetrics)
+			healthRoutes.POST("/validate", healthHandler.ValidateHealthInput)
+			healthRoutes.DELETE("/metrics/:type/:timestamp", healthHandler.DeleteHealthData)
 		}
 
 		// Document endpoints
 		documentRoutes := api.Group("/documents")
-		documentRoutes.Use(middleware.RequireAuth())
+		documentRoutes.Use(middleware.RequireAuthWithTestMode(cfg))
 		{
 			documentRoutes.POST("/upload", documentHandler.UploadDocument)
 			documentRoutes.GET("", documentHandler.ListDocuments)
+			documentRoutes.GET("/:id", documentHandler.GetDocument)
 			documentRoutes.DELETE("/:id", documentHandler.DeleteDocument)
+			documentRoutes.POST("/:id/process", documentHandler.ProcessDocument)
+			documentRoutes.GET("/search", documentHandler.SearchDocuments)
 		}
 
 		// Chat endpoints
 		chatRoutes := api.Group("/chat")
-		chatRoutes.Use(middleware.RequireAuth())
+		chatRoutes.Use(middleware.RequireAuthWithTestMode(cfg))
 		{
 			chatRoutes.POST("", chatHandler.ProcessQuery)
 			chatRoutes.GET("/history", chatHandler.GetChatHistory)
@@ -129,15 +137,22 @@ func main() {
 
 		// Dashboard endpoints
 		dashboardRoutes := api.Group("/dashboard")
-		dashboardRoutes.Use(middleware.RequireAuth())
+		dashboardRoutes.Use(middleware.RequireAuthWithTestMode(cfg))
 		{
 			dashboardRoutes.GET("/summary", dashboardHandler.GetSummary)
 			dashboardRoutes.GET("/trends", dashboardHandler.GetTrends)
+			dashboardRoutes.GET("/overview", dashboardHandler.GetOverview)
 		}
 	}
 
-	// WebSocket for real-time chat (updated to use Clerk auth)
-	router.GET("/ws/chat", middleware.AuthWebSocket(), chatHandler.HandleWebSocket)
+	// WebSocket for real-time chat (updated to use Clerk auth with test mode support)
+	if cfg.TestMode {
+		// In test mode, use simplified auth for WebSocket
+		router.GET("/ws/chat", middleware.TestAuth(cfg), chatHandler.HandleWebSocket)
+	} else {
+		// In normal mode, use Clerk auth for WebSocket
+		router.GET("/ws/chat", middleware.AuthWebSocket(), chatHandler.HandleWebSocket)
+	}
 
 	// Create HTTP server
 	srv := &http.Server{
@@ -147,9 +162,15 @@ func main() {
 
 	// Start server in goroutine
 	go func() {
-		logger.Info("Starting server with Clerk authentication",
-			zap.String("port", cfg.Port),
-			zap.String("environment", cfg.Environment))
+		if cfg.TestMode {
+			logger.Warn("Starting server in TEST MODE - authentication bypassed, userID set to 'test'",
+				zap.String("port", cfg.Port),
+				zap.String("environment", cfg.Environment))
+		} else {
+			logger.Info("Starting server with Clerk authentication",
+				zap.String("port", cfg.Port),
+				zap.String("environment", cfg.Environment))
+		}
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			logger.Fatal("Failed to start server", zap.Error(err))
 		}
