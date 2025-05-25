@@ -22,7 +22,7 @@ interface MetricCardProps {
   unit?: string;
   status?: "normal" | "warning" | "alert";
   statusText?: string;
-  data: number[] | { systolic: number[]; diastolic: number[] }; // Support both formats
+  data: number[] | { systolic: number[]; diastolic: number[] } | { fasting: number[]; postprandial: number[] }; // Support all formats
   color: string;
   icon?: React.ReactNode;
   onAddMetric?: (type: string, value: number) => Promise<boolean>;
@@ -45,6 +45,8 @@ const MetricCard = ({
   const [newValue, setNewValue] = useState("");
   const [systolicValue, setSystolicValue] = useState("");
   const [diastolicValue, setDiastolicValue] = useState("");
+  const [fastingValue, setFastingValue] = useState("");
+  const [postprandialValue, setPostprandialValue] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -60,6 +62,9 @@ const MetricCard = ({
 
   // Check if this is a blood pressure metric
   const isBloodPressure = safeTitle === 'Blood Pressure';
+  
+  // Check if this is a blood glucose metric
+  const isBloodGlucose = safeTitle === 'Blood Sugar';
 
   // Map display title to API metric type
   const getMetricType = (title: string): string => {
@@ -103,6 +108,9 @@ const MetricCard = ({
   const hasData = isBloodPressure 
     ? (typeof data === 'object' && 'systolic' in data && 'diastolic' in data && 
        (data.systolic.length > 0 || data.diastolic.length > 0))
+    : isBloodGlucose
+    ? (typeof data === 'object' && 'fasting' in data && 'postprandial' in data && 
+       (data.fasting.length > 0 || data.postprandial.length > 0))
     : (Array.isArray(data) && data.length > 0 && data.some(val => typeof val === 'number' && !isNaN(val)));
 
   // Prepare chart series based on metric type
@@ -111,18 +119,29 @@ const MetricCard = ({
       return [
         {
           name: 'Systolic',
-          data: data.systolic.filter(val => typeof val === 'number' && !isNaN(val)),
+          data: data.systolic.filter(val => typeof val === 'number' && !isNaN(val)).reverse(),
         },
         {
           name: 'Diastolic', 
-          data: data.diastolic.filter(val => typeof val === 'number' && !isNaN(val)),
+          data: data.diastolic.filter(val => typeof val === 'number' && !isNaN(val)).reverse(),
+        }
+      ];
+    } else if (isBloodGlucose && typeof data === 'object' && 'fasting' in data && 'postprandial' in data) {
+      return [
+        {
+          name: 'Fasting',
+          data: data.fasting.filter(val => typeof val === 'number' && !isNaN(val)).reverse(),
+        },
+        {
+          name: 'Postprandial', 
+          data: data.postprandial.filter(val => typeof val === 'number' && !isNaN(val)).reverse(),
         }
       ];
     } else if (Array.isArray(data)) {
       return [
         {
           name: safeTitle,
-          data: data.filter(val => typeof val === 'number' && !isNaN(val)),
+          data: data.filter(val => typeof val === 'number' && !isNaN(val)).reverse(),
         }
       ];
     }
@@ -133,6 +152,8 @@ const MetricCard = ({
   const getChartColors = () => {
     if (isBloodPressure) {
       return ['#ef4444', '#3b82f6']; // Red for systolic, blue for diastolic
+    } else if (isBloodGlucose) {
+      return ['#10b981', '#f59e0b']; // Green for fasting, amber for postprandial
     }
     return [safeColor];
   };
@@ -221,9 +242,9 @@ const MetricCard = ({
         ? (() => {
             if (isBloodPressure && typeof data === 'object' && 'systolic' in data && 'diastolic' in data) {
               const maxLength = Math.max(data.systolic.length, data.diastolic.length);
-              return Array.from({ length: maxLength }, (_, i) => `Reading ${i + 1}`);
+              return Array.from({ length: maxLength }, (_, i) => `Reading ${maxLength - i}`).reverse();
             } else if (Array.isArray(data)) {
-              return Array.from({ length: data.length }, (_, i) => `Reading ${i + 1}`);
+              return Array.from({ length: data.length }, (_, i) => `Reading ${data.length - i}`).reverse();
             }
             return ["No Data"];
           })()
@@ -258,6 +279,8 @@ const MetricCard = ({
     // Validate inputs based on metric type
     if (isBloodPressure) {
       if (!systolicValue.trim() || !diastolicValue.trim()) return;
+    } else if (isBloodGlucose) {
+      if (!fastingValue.trim() || !postprandialValue.trim()) return;
     } else {
       if (!newValue.trim()) return;
     }
@@ -306,12 +329,62 @@ const MetricCard = ({
           setSystolicValue("");
           setDiastolicValue("");
           
+          // Auto-reload the metric to update the graph
+          if (onReloadMetric) {
+            await onReloadMetric(metricType);
+          }
+          
           // Auto-hide success message after 3 seconds
           setTimeout(() => {
             setSubmitSuccess(false);
           }, 3000);
         } else {
           throw new Error('Failed to add blood pressure - no response received');
+        }
+      } else if (isBloodGlucose) {
+        // Handle blood glucose with fasting and postprandial values
+        const fasting = parseFloat(fastingValue);
+        const postprandial = parseFloat(postprandialValue);
+        
+        // Enhanced validation for blood glucose
+        if (isNaN(fasting) || isNaN(postprandial)) {
+          throw new Error('Please enter valid numbers for both fasting and postprandial values');
+        }
+        
+        if (!isFinite(fasting) || !isFinite(postprandial)) {
+          throw new Error('Please enter finite numbers');
+        }
+        
+        if (fasting <= 0 || postprandial <= 0) {
+          throw new Error('Please enter positive numbers');
+        }
+
+        // Use the composite API for blood glucose
+        const result = await api.health.addCompositeMetric({
+          type: metricType,
+          fasting: fasting,
+          postprandial: postprandial,
+          unit: 'mg/dL',
+          notes: `Added via ${safeTitle} card`,
+          source: 'manual'
+        });
+        
+        if (result) {
+          setSubmitSuccess(true);
+          setFastingValue("");
+          setPostprandialValue("");
+          
+          // Auto-reload the metric to update the graph
+          if (onReloadMetric) {
+            await onReloadMetric(metricType);
+          }
+          
+          // Auto-hide success message after 3 seconds
+          setTimeout(() => {
+            setSubmitSuccess(false);
+          }, 3000);
+        } else {
+          throw new Error('Failed to add blood glucose - no response received');
         }
       } else {
         // Handle regular metrics
@@ -335,6 +408,11 @@ const MetricCard = ({
         if (result) {
           setSubmitSuccess(true);
           setNewValue("");
+          
+          // Auto-reload the metric to update the graph
+          if (onReloadMetric) {
+            await onReloadMetric(metricType);
+          }
           
           // Auto-hide success message after 3 seconds
           setTimeout(() => {
@@ -510,6 +588,44 @@ const MetricCard = ({
                   <span className="text-sm text-muted-foreground">mmHg</span>
                 </div>
               </div>
+            ) : isBloodGlucose ? (
+              // Blood glucose form with fasting and postprandial inputs
+              <div className="space-y-4">
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="fasting" className="text-right">
+                    Fasting:
+                  </Label>
+                  <Input
+                    id="fasting"
+                    type="number"
+                    step="0.1"
+                    className="col-span-2"
+                    value={fastingValue}
+                    onChange={(e) => setFastingValue(e.target.value)}
+                    placeholder="Enter fasting blood glucose"
+                    disabled={submitting}
+                    required
+                  />
+                  <span className="text-sm text-muted-foreground">mg/dL</span>
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="postprandial" className="text-right">
+                    Postprandial:
+                  </Label>
+                  <Input
+                    id="postprandial"
+                    type="number"
+                    step="0.1"
+                    className="col-span-2"
+                    value={postprandialValue}
+                    onChange={(e) => setPostprandialValue(e.target.value)}
+                    placeholder="Enter postprandial blood glucose"
+                    disabled={submitting}
+                    required
+                  />
+                  <span className="text-sm text-muted-foreground">mg/dL</span>
+                </div>
+              </div>
             ) : (
               // Regular metric form with single input
               <div className="grid grid-cols-4 items-center gap-4">
@@ -551,7 +667,7 @@ const MetricCard = ({
                 type="submit" 
                 disabled={
                   submitting || 
-                  (isBloodPressure ? (!systolicValue.trim() || !diastolicValue.trim()) : !newValue.trim())
+                  (isBloodPressure ? (!systolicValue.trim() || !diastolicValue.trim()) : isBloodGlucose ? (!fastingValue.trim() || !postprandialValue.trim()) : !newValue.trim())
                 }
               >
                 {submitting ? (

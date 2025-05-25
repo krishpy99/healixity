@@ -89,11 +89,19 @@ func (d *DynamoDBClient) GetHealthMetrics(userID string, metricType string, star
 		expressionValues[":metricType"] = &dynamodb.AttributeValue{S: aws.String(metricType)}
 	}
 
-	if !startTime.IsZero() && !endTime.IsZero() {
-		filterExpression += " AND sort_key BETWEEN :startKey AND :endKey"
-		expressionValues[":startKey"] = &dynamodb.AttributeValue{S: aws.String(metricType + "#" + startTime.Format("2006-01-02T15:04:05.000000Z"))}
-		expressionValues[":endKey"] = &dynamodb.AttributeValue{S: aws.String(metricType + "#" + endTime.Format("2006-01-02T15:04:05.000000Z~"))}
+	if startTime.IsZero() {
+		//beginning of time
+		startTime = time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC)
 	}
+
+	if endTime.IsZero() {
+		//current time
+		endTime = time.Now()
+	}
+
+	keyCondition += " AND sort_key BETWEEN :startKey AND :endKey"
+	expressionValues[":startKey"] = &dynamodb.AttributeValue{S: aws.String(metricType + "#" + startTime.Format("2006-01-02T15:04:05.000000Z"))}
+	expressionValues[":endKey"] = &dynamodb.AttributeValue{S: aws.String(metricType + "#" + endTime.Format("2006-01-02T15:04:05.000000Z~"))}
 
 	if limit == 0 {
 		limit = 10

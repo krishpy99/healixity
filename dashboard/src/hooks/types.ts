@@ -45,7 +45,7 @@ export interface MetricData {
   unit?: string;
   status: "normal" | "warning" | "alert";
   statusText: string;
-  data: number[] | { systolic: number[]; diastolic: number[] };
+  data: number[] | { systolic: number[]; diastolic: number[] } | { fasting: number[]; postprandial: number[] };
   color: string;
   trend?: 'up' | 'down' | 'stable';
 }
@@ -57,6 +57,15 @@ export interface MetricsData {
   spo2: MetricData;
   temperature: MetricData;
   bloodSugar: MetricData;
+  weight: MetricData;
+  height: MetricData;
+  cholesterolTotal: MetricData;
+  cholesterolHDL: MetricData;
+  cholesterolLDL: MetricData;
+  sleepDuration: MetricData;
+  exerciseDuration: MetricData;
+  waterIntake: MetricData;
+  steps: MetricData;
 }
 
 // Recovery Chart
@@ -206,6 +215,8 @@ export const METRIC_TYPES = {
   HEIGHT: 'height',
   BMI: 'bmi',
   BLOOD_GLUCOSE: 'blood_glucose',
+  BLOOD_GLUCOSE_FASTING: 'blood_glucose_fasting',
+  BLOOD_GLUCOSE_POSTPRANDIAL: 'blood_glucose_postprandial',
   BLOOD_OXYGEN_SATURATION: 'blood_oxygen_saturation',
   BODY_TEMPERATURE: 'body_temperature',
   CHOLESTEROL_TOTAL: 'cholesterol_total',
@@ -227,6 +238,8 @@ export const METRIC_UNITS = {
   [METRIC_TYPES.BLOOD_PRESSURE_DIASTOLIC]: 'mmHg',
   [METRIC_TYPES.BMI]: 'kg/m²',
   [METRIC_TYPES.BLOOD_GLUCOSE]: 'mg/dL',
+  [METRIC_TYPES.BLOOD_GLUCOSE_FASTING]: 'mg/dL',
+  [METRIC_TYPES.BLOOD_GLUCOSE_POSTPRANDIAL]: 'mg/dL',
   [METRIC_TYPES.BLOOD_OXYGEN_SATURATION]: '%',
   [METRIC_TYPES.BODY_TEMPERATURE]: '°C',
   [METRIC_TYPES.WEIGHT]: 'kg',
@@ -254,6 +267,8 @@ export function getMetricDisplayName(metricType: string): string {
     [METRIC_TYPES.BLOOD_PRESSURE_DIASTOLIC]: 'Blood Pressure (Diastolic)',
     [METRIC_TYPES.BMI]: 'Body Mass Index',
     [METRIC_TYPES.BLOOD_GLUCOSE]: 'Blood Glucose',
+    [METRIC_TYPES.BLOOD_GLUCOSE_FASTING]: 'Fasting Plasma Glucose (FPG)',
+    [METRIC_TYPES.BLOOD_GLUCOSE_POSTPRANDIAL]: 'Postprandial Blood Glucose (PPG)',
     [METRIC_TYPES.BLOOD_OXYGEN_SATURATION]: 'Blood Oxygen Saturation (SpO2)',
     [METRIC_TYPES.BODY_TEMPERATURE]: 'Body Temperature',
     [METRIC_TYPES.WEIGHT]: 'Weight',

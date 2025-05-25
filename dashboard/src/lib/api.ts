@@ -43,6 +43,9 @@ async function apiRequest<T>(
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
     }
+  } else {
+    // In test mode, send a test authorization header
+    headers['Authorization'] = 'Bearer test';
   }
 
   const config: RequestInit = {
@@ -135,6 +138,8 @@ export interface CompositeHealthMetricInput {
   value?: number;     // For regular metrics
   systolic?: number;  // For blood pressure
   diastolic?: number; // For blood pressure
+  fasting?: number;   // For blood glucose (FPG)
+  postprandial?: number; // For blood glucose (PPG)
   unit: string;
   notes?: string;
   source?: string;

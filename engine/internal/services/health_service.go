@@ -120,6 +120,69 @@ func (h *HealthService) AddBloodPressureData(userID string, input *models.BloodP
 	return []*models.HealthMetric{systolicMetric, diastolicMetric}, nil
 }
 
+// AddBloodGlucoseData adds blood glucose data with both fasting and postprandial values
+func (h *HealthService) AddBloodGlucoseData(userID string, input *models.BloodGlucoseInput) ([]*models.HealthMetric, error) {
+	// Validate blood glucose input
+	if input.Type != "blood_glucose" {
+		return nil, fmt.Errorf("invalid type for blood glucose input: %s", input.Type)
+	}
+
+	if input.Unit != "mg/dL" {
+		return nil, fmt.Errorf("invalid unit for blood glucose. Expected: mg/dL, got: %s", input.Unit)
+	}
+
+	// Validate fasting and postprandial values
+	if err := h.validateValueRange("blood_glucose_fasting", input.Fasting); err != nil {
+		return nil, fmt.Errorf("invalid fasting glucose value: %w", err)
+	}
+
+	if err := h.validateValueRange("blood_glucose_postprandial", input.Postprandial); err != nil {
+		return nil, fmt.Errorf("invalid postprandial glucose value: %w", err)
+	}
+
+	// Validate that postprandial is typically higher than fasting (but not always required)
+	// This is a soft validation - we'll just log a warning if it seems unusual
+	if input.Postprandial < input.Fasting {
+		// This could be normal in some cases, so we won't fail but could log
+		fmt.Println("Postprandial glucose is lower than fasting glucose")
+	}
+
+	timestamp := time.Now()
+
+	// Create fasting glucose metric
+	fastingMetric := &models.HealthMetric{
+		UserID:    userID,
+		Timestamp: timestamp,
+		Type:      "blood_glucose_fasting",
+		Value:     input.Fasting,
+		Unit:      input.Unit,
+		Notes:     input.Notes,
+		Source:    input.Source,
+	}
+
+	// Create postprandial glucose metric
+	postprandialMetric := &models.HealthMetric{
+		UserID:    userID,
+		Timestamp: timestamp,
+		Type:      "blood_glucose_postprandial",
+		Value:     input.Postprandial,
+		Unit:      input.Unit,
+		Notes:     input.Notes,
+		Source:    input.Source,
+	}
+
+	// Store both metrics in database
+	if err := h.db.PutHealthMetric(fastingMetric); err != nil {
+		return nil, fmt.Errorf("failed to store fasting glucose metric: %w", err)
+	}
+
+	if err := h.db.PutHealthMetric(postprandialMetric); err != nil {
+		return nil, fmt.Errorf("failed to store postprandial glucose metric: %w", err)
+	}
+
+	return []*models.HealthMetric{fastingMetric, postprandialMetric}, nil
+}
+
 // AddCompositeHealthData handles both regular and composite metrics
 func (h *HealthService) AddCompositeHealthData(userID string, input *models.CompositeHealthMetricInput) (interface{}, error) {
 	// Handle blood pressure specially
@@ -138,6 +201,24 @@ func (h *HealthService) AddCompositeHealthData(userID string, input *models.Comp
 		}
 
 		return h.AddBloodPressureData(userID, bpInput)
+	}
+
+	// Handle blood glucose specially
+	if input.Type == "blood_glucose" {
+		if input.Fasting == nil || input.Postprandial == nil {
+			return nil, fmt.Errorf("blood glucose requires both fasting and postprandial values")
+		}
+
+		bgInput := &models.BloodGlucoseInput{
+			Type:         input.Type,
+			Fasting:      *input.Fasting,
+			Postprandial: *input.Postprandial,
+			Unit:         input.Unit,
+			Notes:        input.Notes,
+			Source:       input.Source,
+		}
+
+		return h.AddBloodGlucoseData(userID, bgInput)
 	}
 
 	// Handle regular metrics
@@ -390,6 +471,14 @@ func (h *HealthService) validateValueRange(metricType string, value float64) err
 	case "blood_glucose":
 		if value < 20 || value > 600 {
 			return fmt.Errorf("blood glucose value out of reasonable range (20-600 mg/dL)")
+		}
+	case "blood_glucose_fasting":
+		if value < 50 || value > 200 {
+			return fmt.Errorf("fasting blood glucose value out of reasonable range (50-200 mg/dL)")
+		}
+	case "blood_glucose_postprandial":
+		if value < 70 || value > 400 {
+			return fmt.Errorf("postprandial blood glucose value out of reasonable range (70-400 mg/dL)")
 		}
 	}
 
