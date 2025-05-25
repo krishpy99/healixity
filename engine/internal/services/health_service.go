@@ -59,6 +59,103 @@ func (h *HealthService) AddHealthData(userID string, input *models.HealthMetricI
 	return metric, nil
 }
 
+// AddBloodPressureData adds blood pressure data with both systolic and diastolic values
+func (h *HealthService) AddBloodPressureData(userID string, input *models.BloodPressureInput) ([]*models.HealthMetric, error) {
+	// Validate blood pressure input
+	if input.Type != "blood_pressure" {
+		return nil, fmt.Errorf("invalid type for blood pressure input: %s", input.Type)
+	}
+
+	if input.Unit != "mmHg" {
+		return nil, fmt.Errorf("invalid unit for blood pressure. Expected: mmHg, got: %s", input.Unit)
+	}
+
+	// Validate systolic and diastolic values
+	if err := h.validateValueRange("blood_pressure_systolic", input.Systolic); err != nil {
+		return nil, fmt.Errorf("invalid systolic value: %w", err)
+	}
+
+	if err := h.validateValueRange("blood_pressure_diastolic", input.Diastolic); err != nil {
+		return nil, fmt.Errorf("invalid diastolic value: %w", err)
+	}
+
+	// Validate that systolic > diastolic
+	if input.Systolic <= input.Diastolic {
+		return nil, fmt.Errorf("systolic pressure must be greater than diastolic pressure")
+	}
+
+	timestamp := time.Now()
+
+	// Create systolic metric
+	systolicMetric := &models.HealthMetric{
+		UserID:    userID,
+		Timestamp: timestamp,
+		Type:      "blood_pressure_systolic",
+		Value:     input.Systolic,
+		Unit:      input.Unit,
+		Notes:     input.Notes,
+		Source:    input.Source,
+	}
+
+	// Create diastolic metric
+	diastolicMetric := &models.HealthMetric{
+		UserID:    userID,
+		Timestamp: timestamp,
+		Type:      "blood_pressure_diastolic",
+		Value:     input.Diastolic,
+		Unit:      input.Unit,
+		Notes:     input.Notes,
+		Source:    input.Source,
+	}
+
+	// Store both metrics in database
+	if err := h.db.PutHealthMetric(systolicMetric); err != nil {
+		return nil, fmt.Errorf("failed to store systolic metric: %w", err)
+	}
+
+	if err := h.db.PutHealthMetric(diastolicMetric); err != nil {
+		return nil, fmt.Errorf("failed to store diastolic metric: %w", err)
+	}
+
+	return []*models.HealthMetric{systolicMetric, diastolicMetric}, nil
+}
+
+// AddCompositeHealthData handles both regular and composite metrics
+func (h *HealthService) AddCompositeHealthData(userID string, input *models.CompositeHealthMetricInput) (interface{}, error) {
+	// Handle blood pressure specially
+	if input.Type == "blood_pressure" {
+		if input.Systolic == nil || input.Diastolic == nil {
+			return nil, fmt.Errorf("blood pressure requires both systolic and diastolic values")
+		}
+
+		bpInput := &models.BloodPressureInput{
+			Type:      input.Type,
+			Systolic:  *input.Systolic,
+			Diastolic: *input.Diastolic,
+			Unit:      input.Unit,
+			Notes:     input.Notes,
+			Source:    input.Source,
+		}
+
+		return h.AddBloodPressureData(userID, bpInput)
+	}
+
+	// Handle regular metrics
+	if input.Value == nil {
+		return nil, fmt.Errorf("regular metrics require a value")
+	}
+
+	regularInput := &models.HealthMetricInput{
+		Type:   input.Type,
+		Value:  *input.Value,
+		Unit:   input.Unit,
+		Notes:  input.Notes,
+		Source: input.Source,
+	}
+
+	return h.AddHealthData(userID, regularInput)
+}
+
 // GetMetricHistory retrieves historical data for a specific metric type
 func (h *HealthService) GetMetricHistory(userID, metricType string, startTime, endTime time.Time, limit int) ([]models.HealthMetric, error) {
 	// Validate metric type
@@ -66,7 +163,7 @@ func (h *HealthService) GetMetricHistory(userID, metricType string, startTime, e
 		return nil, fmt.Errorf("unsupported metric type: %s", metricType)
 	}
 
-	metrics, err := h.db.GetHealthMetrics(userID, metricType, startTime, endTime)
+	metrics, err := h.db.GetHealthMetrics(userID, metricType, startTime, endTime, limit)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get health metrics: %w", err)
 	}

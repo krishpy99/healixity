@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { api } from '@/lib/api';
 import { MetricsData, RecoveryChartData, HealthSummary, HealthTrend, MetricData, METRIC_TYPES } from './types';
 
@@ -9,16 +9,17 @@ interface DashboardData {
   error: string | null;
   healthSummary?: HealthSummary;
   trends?: HealthTrend[];
+  reload: () => Promise<void>;
+  reloadSpecificMetric: (metricType: string) => Promise<void>;
 }
 
 // Transform engine API data to dashboard format with comprehensive fallbacks
 function transformHealthSummaryToMetricsData(summary: HealthSummary | null | undefined): MetricsData {
   const getMetricStatus = (value: number, type: string): { status: 'normal' | 'warning' | 'alert'; statusText: string; color: string } => {
-    // Basic health status logic - can be enhanced with proper ranges
     switch (type) {
       case METRIC_TYPES.HEART_RATE:
-        if (value < 60 || value > 100) return { status: 'alert', statusText: 'Outside normal range', color: '#ef4444' };
-        if (value < 70 || value > 90) return { status: 'warning', statusText: 'Borderline', color: '#f59e0b' };
+        if (value > 100 || value < 60) return { status: 'alert', statusText: 'Abnormal', color: '#ef4444' };
+        if (value > 90 || value < 70) return { status: 'warning', statusText: 'Monitor', color: '#f59e0b' };
         return { status: 'normal', statusText: 'Normal', color: '#10b981' };
       
       case METRIC_TYPES.BLOOD_PRESSURE_SYSTOLIC:
@@ -29,6 +30,21 @@ function transformHealthSummaryToMetricsData(summary: HealthSummary | null | und
       case METRIC_TYPES.BLOOD_GLUCOSE:
         if (value > 126) return { status: 'alert', statusText: 'High', color: '#ef4444' };
         if (value > 100) return { status: 'warning', statusText: 'Elevated', color: '#f59e0b' };
+        return { status: 'normal', statusText: 'Normal', color: '#10b981' };
+      
+      case METRIC_TYPES.BLOOD_OXYGEN_SATURATION:
+        if (value < 90) return { status: 'alert', statusText: 'Critical', color: '#ef4444' };
+        if (value < 95) return { status: 'warning', statusText: 'Low', color: '#f59e0b' };
+        return { status: 'normal', statusText: 'Normal', color: '#10b981' };
+      
+      case METRIC_TYPES.BODY_TEMPERATURE:
+        if (value > 38.0 || value < 35.0) return { status: 'alert', statusText: 'Abnormal', color: '#ef4444' };
+        if (value > 37.5 || value < 36.0) return { status: 'warning', statusText: 'Monitor', color: '#f59e0b' };
+        return { status: 'normal', statusText: 'Normal', color: '#10b981' };
+      
+      case METRIC_TYPES.BMI:
+        if (value > 30 || value < 18.5) return { status: 'alert', statusText: 'Abnormal', color: '#ef4444' };
+        if (value > 25 || value < 20) return { status: 'warning', statusText: 'Monitor', color: '#f59e0b' };
         return { status: 'normal', statusText: 'Normal', color: '#10b981' };
       
       default:
@@ -105,7 +121,7 @@ function transformHealthSummaryToMetricsData(summary: HealthSummary | null | und
           unit: 'mmHg',
           status: statusInfo.status,
           statusText: statusInfo.statusText,
-          data: [systolic.value, diastolic.value],
+          data: { systolic: [systolic.value], diastolic: [diastolic.value] }, // Separate arrays for dual-line plotting
           color: statusInfo.color,
           trend: systolic.trend || undefined
         };
@@ -114,8 +130,8 @@ function transformHealthSummaryToMetricsData(summary: HealthSummary | null | und
       return createMetricData('', '--/--');
     })(),
     bmi: createMetricData(METRIC_TYPES.BMI),
-    spo2: createMetricData('blood_oxygen_saturation', '98'),
-    temperature: createMetricData('body_temperature', '98.6'),
+    spo2: createMetricData(METRIC_TYPES.BLOOD_OXYGEN_SATURATION, '98'),
+    temperature: createMetricData(METRIC_TYPES.BODY_TEMPERATURE, '98.6'),
     bloodSugar: createMetricData(METRIC_TYPES.BLOOD_GLUCOSE)
   };
 }
@@ -168,54 +184,211 @@ export function useDashboardData(): DashboardData {
     metrics: null,
     recoveryChartData: null,
     loading: true,
-    error: null
+    error: null,
+    reload: async () => {},
+    reloadSpecificMetric: async () => {}
   });
 
-  useEffect(() => {
-    const fetchDashboardData = async () => {
-      try {
-        console.log('🔄 useDashboardData: Fetching dashboard overview...');
-        setData(prev => ({ ...prev, loading: true, error: null }));
+  const fetchDashboardData = async () => {
+    try {
+      console.log('🔄 useDashboardData: Fetching latest metrics...');
+      setData(prev => ({ ...prev, loading: true, error: null }));
 
-        // Fetch dashboard overview which includes summary and trends
-        const overview = await api.dashboard.getOverview();
-        console.log('✅ useDashboardData: Dashboard overview fetched successfully');
+      // Fetch latest metrics for initial page load
+      const latestMetrics = await api.health.getLatestMetrics();
+      console.log('✅ useDashboardData: Latest metrics fetched successfully');
+      
+      // Create a health summary from latest metrics
+      const healthSummary: HealthSummary = {
+        user_id: 'current_user', // Will be replaced with actual user ID
+        last_updated: new Date().toISOString(),
+        metrics: latestMetrics.metrics
+      };
+      
+      // Transform the data for dashboard components with fallbacks
+      const transformedMetrics = transformHealthSummaryToMetricsData(healthSummary);
+      
+      // For now, use empty chart data since we're focusing on latest metrics
+      const transformedChartData: RecoveryChartData = { labels: [], datasets: [] };
+
+      setData(prev => ({
+        ...prev,
+        metrics: transformedMetrics,
+        recoveryChartData: transformedChartData,
+        healthSummary: healthSummary,
+        trends: [],
+        loading: false,
+        error: null
+      }));
+
+    } catch (error) {
+      console.error('❌ useDashboardData: Failed to fetch latest metrics:', error);
+      
+      // Provide fallback data instead of showing error for better UX
+      const fallbackMetrics: MetricsData = {
+        heartRate: { current: '--', status: 'normal', statusText: 'No data', data: [], color: '#6b7280' },
+        bloodPressure: { current: '--/--', status: 'normal', statusText: 'No data', data: [], color: '#6b7280' },
+        bmi: { current: '--', status: 'normal', statusText: 'No data', data: [], color: '#6b7280' },
+        spo2: { current: '--', status: 'normal', statusText: 'No data', data: [], color: '#6b7280' },
+        temperature: { current: '--', status: 'normal', statusText: 'No data', data: [], color: '#6b7280' },
+        bloodSugar: { current: '--', status: 'normal', statusText: 'No data', data: [], color: '#6b7280' }
+      };
+
+      setData(prev => ({
+        ...prev,
+        metrics: fallbackMetrics,
+        recoveryChartData: { labels: [], datasets: [] },
+        loading: false,
+        error: `Failed to load data: ${error instanceof Error ? error.message : 'Unknown error'}`
+      }));
+    }
+  };
+
+  // Set the reload function using useCallback
+  const reload = useCallback(async () => {
+    await fetchDashboardData();
+  }, []);
+
+  // Set the reload specific metric function using useCallback
+  const reloadSpecificMetric = useCallback(async (metricType: string) => {
+    try {
+      console.log(`🔄 useDashboardData: Reloading specific metric: ${metricType}`);
+      
+      // Handle blood pressure specially - need to fetch both systolic and diastolic
+      if (metricType === METRIC_TYPES.BLOOD_PRESSURE) {
+        const [systolicHistory, diastolicHistory] = await Promise.all([
+          api.health.getMetricHistory(METRIC_TYPES.BLOOD_PRESSURE_SYSTOLIC, { limit: 20 }),
+          api.health.getMetricHistory(METRIC_TYPES.BLOOD_PRESSURE_DIASTOLIC, { limit: 20 })
+        ]);
         
-        // Transform the data for dashboard components with fallbacks
-        const transformedMetrics = transformHealthSummaryToMetricsData(overview?.summary);
-        const transformedChartData = transformTrendsToChartData(overview?.recent_trends);
-
-        setData({
-          metrics: transformedMetrics,
-          recoveryChartData: transformedChartData,
-          healthSummary: overview?.summary || undefined,
-          trends: Array.isArray(overview?.recent_trends) ? overview.recent_trends : [],
-          loading: false,
-          error: null
+        console.log(`✅ useDashboardData: Blood pressure history fetched`);
+        
+        // Update the blood pressure data with historical values
+        setData(prev => {
+          if (!prev.metrics) return prev;
+          
+          const systolicData = systolicHistory.metrics?.map(m => m.value) || [];
+          const diastolicData = diastolicHistory.metrics?.map(m => m.value) || [];
+          
+          // Get latest values for display
+          const latestSystolic = systolicData[0] || 0;
+          const latestDiastolic = diastolicData[0] || 0;
+          
+          const statusInfo = getMetricStatus(latestSystolic, METRIC_TYPES.BLOOD_PRESSURE_SYSTOLIC);
+          
+          return {
+            ...prev,
+            metrics: {
+              ...prev.metrics,
+              bloodPressure: {
+                current: `${latestSystolic}/${latestDiastolic}`,
+                unit: 'mmHg',
+                status: statusInfo.status,
+                statusText: statusInfo.statusText,
+                data: { systolic: systolicData, diastolic: diastolicData }, // Historical data for plotting
+                color: statusInfo.color,
+                trend: prev.metrics.bloodPressure.trend
+              }
+            }
+          };
         });
-
-      } catch (error) {
-        console.error('❌ useDashboardData: Failed to fetch dashboard data:', error);
+      } else {
+        // Handle regular metrics
+        const metricHistory = await api.health.getMetricHistory(metricType, { limit: 20 });
+        console.log(`✅ useDashboardData: Metric history fetched for ${metricType}`);
         
-        // Provide fallback data instead of showing error for better UX
-        const fallbackMetrics: MetricsData = {
-          heartRate: { current: '--', status: 'normal', statusText: 'No data', data: [], color: '#6b7280' },
-          bloodPressure: { current: '--/--', status: 'normal', statusText: 'No data', data: [], color: '#6b7280' },
-          bmi: { current: '--', status: 'normal', statusText: 'No data', data: [], color: '#6b7280' },
-          spo2: { current: '--', status: 'normal', statusText: 'No data', data: [], color: '#6b7280' },
-          temperature: { current: '--', status: 'normal', statusText: 'No data', data: [], color: '#6b7280' },
-          bloodSugar: { current: '--', status: 'normal', statusText: 'No data', data: [], color: '#6b7280' }
-        };
-
-        setData({
-          metrics: fallbackMetrics,
-          recoveryChartData: { labels: [], datasets: [] },
-          loading: false,
-          error: `Failed to load data: ${error instanceof Error ? error.message : 'Unknown error'}`
+        // Update the specific metric data with historical values
+        setData(prev => {
+          if (!prev.metrics) return prev;
+          
+          const historyData = metricHistory.metrics?.map(m => m.value) || [];
+          const latestValue = historyData[0] || 0;
+          
+          // Determine which metric to update based on metricType
+          const metricKey = getMetricKey(metricType);
+          if (!metricKey) return prev;
+          
+          const statusInfo = getMetricStatus(latestValue, metricType);
+          
+          return {
+            ...prev,
+            metrics: {
+              ...prev.metrics,
+              [metricKey]: {
+                ...prev.metrics[metricKey],
+                current: latestValue.toString(),
+                status: statusInfo.status,
+                statusText: statusInfo.statusText,
+                data: historyData,
+                color: statusInfo.color
+              }
+            }
+          };
         });
       }
-    };
+      
+    } catch (error) {
+      console.error(`❌ useDashboardData: Failed to reload metric ${metricType}:`, error);
+      // Don't update state on error, just log it
+    }
+  }, []);
 
+  // Helper function to map metric types to metric keys
+  const getMetricKey = (metricType: string): keyof MetricsData | null => {
+    const mapping: Record<string, keyof MetricsData> = {
+      [METRIC_TYPES.HEART_RATE]: 'heartRate',
+      [METRIC_TYPES.BMI]: 'bmi',
+      [METRIC_TYPES.BLOOD_OXYGEN_SATURATION]: 'spo2',
+      [METRIC_TYPES.BODY_TEMPERATURE]: 'temperature',
+      [METRIC_TYPES.BLOOD_GLUCOSE]: 'bloodSugar'
+    };
+    return mapping[metricType] || null;
+  };
+
+  // Helper function to get metric status (moved from transform function)
+  const getMetricStatus = (value: number, type: string): { status: 'normal' | 'warning' | 'alert'; statusText: string; color: string } => {
+    switch (type) {
+      case METRIC_TYPES.HEART_RATE:
+        if (value > 100 || value < 60) return { status: 'alert', statusText: 'Abnormal', color: '#ef4444' };
+        if (value > 90 || value < 70) return { status: 'warning', statusText: 'Monitor', color: '#f59e0b' };
+        return { status: 'normal', statusText: 'Normal', color: '#10b981' };
+      
+      case METRIC_TYPES.BLOOD_PRESSURE_SYSTOLIC:
+        if (value > 140) return { status: 'alert', statusText: 'High', color: '#ef4444' };
+        if (value > 120) return { status: 'warning', statusText: 'Elevated', color: '#f59e0b' };
+        return { status: 'normal', statusText: 'Normal', color: '#10b981' };
+      
+      case METRIC_TYPES.BLOOD_GLUCOSE:
+        if (value > 126) return { status: 'alert', statusText: 'High', color: '#ef4444' };
+        if (value > 100) return { status: 'warning', statusText: 'Elevated', color: '#f59e0b' };
+        return { status: 'normal', statusText: 'Normal', color: '#10b981' };
+      
+      case METRIC_TYPES.BLOOD_OXYGEN_SATURATION:
+        if (value < 90) return { status: 'alert', statusText: 'Critical', color: '#ef4444' };
+        if (value < 95) return { status: 'warning', statusText: 'Low', color: '#f59e0b' };
+        return { status: 'normal', statusText: 'Normal', color: '#10b981' };
+      
+      case METRIC_TYPES.BODY_TEMPERATURE:
+        if (value > 38.0 || value < 35.0) return { status: 'alert', statusText: 'Abnormal', color: '#ef4444' };
+        if (value > 37.5 || value < 36.0) return { status: 'warning', statusText: 'Monitor', color: '#f59e0b' };
+        return { status: 'normal', statusText: 'Normal', color: '#10b981' };
+      
+      case METRIC_TYPES.BMI:
+        if (value > 30 || value < 18.5) return { status: 'alert', statusText: 'Abnormal', color: '#ef4444' };
+        if (value > 25 || value < 20) return { status: 'warning', statusText: 'Monitor', color: '#f59e0b' };
+        return { status: 'normal', statusText: 'Normal', color: '#10b981' };
+      
+      default:
+        return { status: 'normal', statusText: 'Normal', color: '#10b981' };
+    }
+  };
+
+  // Update the data with the reload functions
+  useEffect(() => {
+    setData(prev => ({ ...prev, reload, reloadSpecificMetric }));
+  }, [reload, reloadSpecificMetric]);
+
+  useEffect(() => {
     fetchDashboardData();
   }, []);
 

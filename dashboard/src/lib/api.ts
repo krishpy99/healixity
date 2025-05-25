@@ -121,6 +121,25 @@ export interface HealthMetricInput {
   source?: string;
 }
 
+export interface BloodPressureInput {
+  type: 'blood_pressure';
+  systolic: number;
+  diastolic: number;
+  unit: string;
+  notes?: string;
+  source?: string;
+}
+
+export interface CompositeHealthMetricInput {
+  type: string;
+  value?: number;     // For regular metrics
+  systolic?: number;  // For blood pressure
+  diastolic?: number; // For blood pressure
+  unit: string;
+  notes?: string;
+  source?: string;
+}
+
 export interface LatestMetric {
   value: number;
   unit: string;
@@ -151,6 +170,13 @@ export const healthApi = {
   // Add health metric
   addMetric: (metric: HealthMetricInput): Promise<HealthMetric> =>
     apiRequest('/api/health/metrics', {
+      method: 'POST',
+      body: JSON.stringify(metric),
+    }),
+
+  // Add composite health metric (supports blood pressure with systolic/diastolic)
+  addCompositeMetric: (metric: CompositeHealthMetricInput): Promise<any> =>
+    apiRequest('/api/health/metrics/composite', {
       method: 'POST',
       body: JSON.stringify(metric),
     }),

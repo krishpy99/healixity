@@ -51,6 +51,9 @@ func NewDynamoDBClient(cfg *config.Config) (*DynamoDBClient, error) {
 
 // PutHealthMetric stores a health metric in DynamoDB
 func (d *DynamoDBClient) PutHealthMetric(metric *models.HealthMetric) error {
+	// Set the sort key before marshaling
+	metric.SortKey = metric.GetSortKey()
+
 	item, err := metric.ToDynamoDBItem()
 	if err != nil {
 		return fmt.Errorf("failed to marshal health metric: %w", err)
@@ -70,7 +73,8 @@ func (d *DynamoDBClient) PutHealthMetric(metric *models.HealthMetric) error {
 }
 
 // GetHealthMetrics retrieves health metrics for a user within a time range
-func (d *DynamoDBClient) GetHealthMetrics(userID string, metricType string, startTime, endTime time.Time) ([]models.HealthMetric, error) {
+func (d *DynamoDBClient) GetHealthMetrics(userID string, metricType string, startTime, endTime time.Time, limit int) ([]models.HealthMetric, error) {
+
 	keyCondition := "user_id = :userID"
 	expressionValues := map[string]*dynamodb.AttributeValue{
 		":userID": {
@@ -78,37 +82,30 @@ func (d *DynamoDBClient) GetHealthMetrics(userID string, metricType string, star
 		},
 	}
 
-	// Add time range filtering if specified
+	filterExpression := ""
+
+	if metricType != "" {
+		filterExpression = "metric_type = :metricType"
+		expressionValues[":metricType"] = &dynamodb.AttributeValue{S: aws.String(metricType)}
+	}
+
 	if !startTime.IsZero() && !endTime.IsZero() {
-		keyCondition += " AND #ts BETWEEN :startTime AND :endTime"
-		expressionValues[":startTime"] = &dynamodb.AttributeValue{
-			S: aws.String(startTime.Format("2006-01-02T15:04:05.000Z")),
-		}
-		expressionValues[":endTime"] = &dynamodb.AttributeValue{
-			S: aws.String(endTime.Format("2006-01-02T15:04:05.000Z")),
-		}
+		filterExpression += " AND sort_key BETWEEN :startKey AND :endKey"
+		expressionValues[":startKey"] = &dynamodb.AttributeValue{S: aws.String(metricType + "#" + startTime.Format("2006-01-02T15:04:05.000000Z"))}
+		expressionValues[":endKey"] = &dynamodb.AttributeValue{S: aws.String(metricType + "#" + endTime.Format("2006-01-02T15:04:05.000000Z~"))}
+	}
+
+	if limit == 0 {
+		limit = 10
 	}
 
 	input := &dynamodb.QueryInput{
 		TableName:                 aws.String(d.healthTableName),
+		FilterExpression:          aws.String(filterExpression),
 		KeyConditionExpression:    aws.String(keyCondition),
 		ExpressionAttributeValues: expressionValues,
 		ScanIndexForward:          aws.Bool(false), // Latest first
-	}
-
-	// Add attribute names for reserved keywords
-	if !startTime.IsZero() && !endTime.IsZero() {
-		input.ExpressionAttributeNames = map[string]*string{
-			"#ts": aws.String("timestamp"),
-		}
-	}
-
-	// Add filter for metric type if specified
-	if metricType != "" {
-		input.FilterExpression = aws.String("metric_type = :metricType")
-		expressionValues[":metricType"] = &dynamodb.AttributeValue{
-			S: aws.String(metricType),
-		}
+		Limit:                     aws.Int64(int64(limit)),
 	}
 
 	result, err := d.client.Query(input)
@@ -138,7 +135,7 @@ func (d *DynamoDBClient) GetLatestHealthMetrics(userID string) (map[string]model
 				S: aws.String(userID),
 			},
 		},
-		ScanIndexForward: aws.Bool(false), // Latest first
+		ScanIndexForward: aws.Bool(false), // Latest first (descending sort key order)
 		Limit:            aws.Int64(100),  // Limit to avoid too much data
 	}
 
@@ -155,7 +152,8 @@ func (d *DynamoDBClient) GetLatestHealthMetrics(userID string) (map[string]model
 		}
 
 		// Keep only the latest metric for each type
-		if existing, exists := latestMetrics[metric.Type]; !exists || metric.Timestamp.After(existing.Timestamp) {
+		// Since we're sorting by sort_key descending, the first occurrence of each type is the latest
+		if _, exists := latestMetrics[metric.Type]; !exists {
 			latestMetrics[metric.Type] = metric
 		}
 	}

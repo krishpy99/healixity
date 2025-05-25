@@ -1,23 +1,17 @@
 import React, { useState } from "react";
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "./ui/card";
-import { Badge } from "./ui/badge";
-import { Separator } from "./ui/separator";
-import { 
-  Dialog, 
-  DialogContent, 
-  DialogHeader, 
-  DialogTitle, 
-  DialogDescription,
-  DialogFooter 
-} from "./ui/dialog";
-import { Button } from "./ui/button";
-import { Input } from "./ui/input";
-import { Label } from "./ui/label";
-import { Alert, AlertDescription } from "./ui/alert";
-import { Loader2, CheckCircle } from "lucide-react";
-import dynamic from "next/dynamic";
+import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Separator } from "@/components/ui/separator";
+import { CheckCircle, Loader2, RefreshCw } from "lucide-react";
 import { useTheme } from "@/components/ThemeProvider";
+import dynamic from "next/dynamic";
 import { METRIC_TYPES } from "@/hooks/types";
+import { api } from "@/lib/api";
 
 // Import ApexCharts dynamically to prevent SSR issues
 const Chart = dynamic(() => import("react-apexcharts"), { ssr: false });
@@ -28,10 +22,11 @@ interface MetricCardProps {
   unit?: string;
   status?: "normal" | "warning" | "alert";
   statusText?: string;
-  data: number[];
+  data: number[] | { systolic: number[]; diastolic: number[] }; // Support both formats
   color: string;
   icon?: React.ReactNode;
-  onAddMetric?: (type: string, value: number, unit: string) => Promise<boolean>;
+  onAddMetric?: (type: string, value: number) => Promise<boolean>;
+  onReloadMetric?: (metricType: string) => Promise<void>;
 }
 
 const MetricCard = ({
@@ -44,12 +39,16 @@ const MetricCard = ({
   color,
   icon,
   onAddMetric,
+  onReloadMetric,
 }: MetricCardProps) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newValue, setNewValue] = useState("");
+  const [systolicValue, setSystolicValue] = useState("");
+  const [diastolicValue, setDiastolicValue] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [reloading, setReloading] = useState(false);
   const { theme } = useTheme();
 
   // Fallbacks for potentially undefined props
@@ -57,8 +56,10 @@ const MetricCard = ({
   const safeValue = value || '--';
   const safeStatus = status || 'normal';
   const safeStatusText = statusText || 'No status';
-  const safeData = Array.isArray(data) ? data : [];
   const safeColor = color || '#6b7280';
+
+  // Check if this is a blood pressure metric
+  const isBloodPressure = safeTitle === 'Blood Pressure';
 
   // Map display title to API metric type
   const getMetricType = (title: string): string => {
@@ -66,10 +67,10 @@ const MetricCard = ({
     
     const titleMap: Record<string, string> = {
       'Heart Rate': METRIC_TYPES.HEART_RATE,
-      'Blood Pressure': METRIC_TYPES.BLOOD_PRESSURE_SYSTOLIC,
+      'Blood Pressure': METRIC_TYPES.BLOOD_PRESSURE,
       'BMI': METRIC_TYPES.BMI,
-      'SpO2': 'blood_oxygen_saturation',
-      'Temperature': 'body_temperature',
+      'SpO2': METRIC_TYPES.BLOOD_OXYGEN_SATURATION,
+      'Temperature': METRIC_TYPES.BODY_TEMPERATURE,
       'Blood Sugar': METRIC_TYPES.BLOOD_GLUCOSE,
     };
     return titleMap[title] || title.toLowerCase().replace(/\s+/g, '_');
@@ -99,7 +100,42 @@ const MetricCard = ({
   const statusBadgeClass = getStatusBadgeClass(safeStatus);
 
   // Check if there's data to display
-  const hasData = safeData.length > 0 && safeData.some(val => typeof val === 'number' && !isNaN(val));
+  const hasData = isBloodPressure 
+    ? (typeof data === 'object' && 'systolic' in data && 'diastolic' in data && 
+       (data.systolic.length > 0 || data.diastolic.length > 0))
+    : (Array.isArray(data) && data.length > 0 && data.some(val => typeof val === 'number' && !isNaN(val)));
+
+  // Prepare chart series based on metric type
+  const getChartSeries = () => {
+    if (isBloodPressure && typeof data === 'object' && 'systolic' in data && 'diastolic' in data) {
+      return [
+        {
+          name: 'Systolic',
+          data: data.systolic.filter(val => typeof val === 'number' && !isNaN(val)),
+        },
+        {
+          name: 'Diastolic', 
+          data: data.diastolic.filter(val => typeof val === 'number' && !isNaN(val)),
+        }
+      ];
+    } else if (Array.isArray(data)) {
+      return [
+        {
+          name: safeTitle,
+          data: data.filter(val => typeof val === 'number' && !isNaN(val)),
+        }
+      ];
+    }
+    return [{ name: safeTitle, data: [0] }];
+  };
+
+  // Get chart colors based on metric type
+  const getChartColors = () => {
+    if (isBloodPressure) {
+      return ['#ef4444', '#3b82f6']; // Red for systolic, blue for diastolic
+    }
+    return [safeColor];
+  };
 
   const chartOptions = {
     chart: {
@@ -137,7 +173,7 @@ const MetricCard = ({
         stops: [0, 90, 100],
       },
     },
-    colors: [safeColor],
+    colors: getChartColors(),
     grid: {
       show: false,
       padding: {
@@ -165,12 +201,7 @@ const MetricCard = ({
     },
   };
 
-  const chartSeries = [
-    {
-      name: safeTitle,
-      data: hasData ? safeData.filter(val => typeof val === 'number' && !isNaN(val)) : [0], // Filter out invalid values
-    },
-  ];
+  const chartSeries = getChartSeries();
 
   // Enhanced chart options for the modal
   const modalChartOptions = {
@@ -187,7 +218,15 @@ const MetricCard = ({
     },
     xaxis: {
       categories: hasData 
-        ? Array.from({ length: safeData.length }, (_, i) => `Day ${i + 1}`) 
+        ? (() => {
+            if (isBloodPressure && typeof data === 'object' && 'systolic' in data && 'diastolic' in data) {
+              const maxLength = Math.max(data.systolic.length, data.diastolic.length);
+              return Array.from({ length: maxLength }, (_, i) => `Reading ${i + 1}`);
+            } else if (Array.isArray(data)) {
+              return Array.from({ length: data.length }, (_, i) => `Reading ${i + 1}`);
+            }
+            return ["No Data"];
+          })()
         : ["No Data"],
       labels: {
         show: true,
@@ -215,7 +254,13 @@ const MetricCard = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newValue.trim()) return;
+    
+    // Validate inputs based on metric type
+    if (isBloodPressure) {
+      if (!systolicValue.trim() || !diastolicValue.trim()) return;
+    } else {
+      if (!newValue.trim()) return;
+    }
 
     setSubmitting(true);
     setSubmitError(null);
@@ -223,32 +268,81 @@ const MetricCard = ({
 
     try {
       const metricType = getMetricType(safeTitle);
-      const numericValue = parseFloat(newValue);
       
-      if (isNaN(numericValue)) {
-        throw new Error('Please enter a valid number');
-      }
-
-      const metricInput = {
-        type: metricType,
-        value: numericValue,
-        unit: unit || '',
-        notes: `Added via ${safeTitle} card`,
-        source: 'manual'
-      };
-
-      const result = await onAddMetric?.(metricType, numericValue, unit || '');
-      
-      if (result) {
-        setSubmitSuccess(true);
-        setNewValue("");
+      if (isBloodPressure) {
+        // Handle blood pressure with systolic and diastolic values
+        const systolic = parseFloat(systolicValue);
+        const diastolic = parseFloat(diastolicValue);
         
-        // Auto-hide success message after 3 seconds
-        setTimeout(() => {
-          setSubmitSuccess(false);
-        }, 3000);
+        // Enhanced validation for blood pressure
+        if (isNaN(systolic) || isNaN(diastolic)) {
+          throw new Error('Please enter valid numbers for both systolic and diastolic values');
+        }
+        
+        if (!isFinite(systolic) || !isFinite(diastolic)) {
+          throw new Error('Please enter finite numbers');
+        }
+        
+        if (systolic <= 0 || diastolic <= 0) {
+          throw new Error('Please enter positive numbers');
+        }
+        
+        if (systolic <= diastolic) {
+          throw new Error('Systolic pressure must be greater than diastolic pressure');
+        }
+
+        // Use the composite API for blood pressure
+        const result = await api.health.addCompositeMetric({
+          type: metricType,
+          systolic: systolic,
+          diastolic: diastolic,
+          unit: 'mmHg',
+          notes: `Added via ${safeTitle} card`,
+          source: 'manual'
+        });
+        
+        if (result) {
+          setSubmitSuccess(true);
+          setSystolicValue("");
+          setDiastolicValue("");
+          
+          // Auto-hide success message after 3 seconds
+          setTimeout(() => {
+            setSubmitSuccess(false);
+          }, 3000);
+        } else {
+          throw new Error('Failed to add blood pressure - no response received');
+        }
       } else {
-        throw new Error('Failed to add metric - no response received');
+        // Handle regular metrics
+        const numericValue = parseFloat(newValue);
+        
+        // Enhanced validation
+        if (isNaN(numericValue)) {
+          throw new Error('Please enter a valid number');
+        }
+        
+        if (!isFinite(numericValue)) {
+          throw new Error('Please enter a finite number');
+        }
+        
+        if (numericValue < 0) {
+          throw new Error('Please enter a positive number');
+        }
+
+        const result = await onAddMetric?.(metricType, numericValue);
+        
+        if (result) {
+          setSubmitSuccess(true);
+          setNewValue("");
+          
+          // Auto-hide success message after 3 seconds
+          setTimeout(() => {
+            setSubmitSuccess(false);
+          }, 3000);
+        } else {
+          throw new Error('Failed to add metric - no response received');
+        }
       }
 
     } catch (error) {
@@ -256,6 +350,22 @@ const MetricCard = ({
       setSubmitError(error instanceof Error ? error.message : 'Failed to add metric');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleReload = async (e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent opening the modal when clicking reload
+    
+    if (!onReloadMetric || reloading) return;
+    
+    setReloading(true);
+    try {
+      await onReloadMetric(getMetricType(safeTitle));
+    } catch (error) {
+      console.error(`Failed to reload ${safeTitle} metric:`, error);
+      // Could add error toast here if needed
+    } finally {
+      setReloading(false);
     }
   };
 
@@ -270,7 +380,9 @@ const MetricCard = ({
             <CardTitle className="text-sm font-medium text-muted-foreground">
               {safeTitle}
             </CardTitle>
-            {icon && <div className="p-1 rounded-full bg-muted flex items-center justify-center">{icon}</div>}
+            <div className="flex items-center gap-1">
+              {icon && <div className="p-1 rounded-full bg-muted flex items-center justify-center">{icon}</div>}
+            </div>
           </div>
         </CardHeader>
         <CardContent className="pb-2">
@@ -312,7 +424,30 @@ const MetricCard = ({
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
         <DialogContent className="sm:max-w-[600px]">
           <DialogHeader>
-            <DialogTitle>{safeTitle} Details</DialogTitle>
+            <div className="flex items-center justify-between">
+              <DialogTitle>{safeTitle} Details</DialogTitle>
+              {onReloadMetric && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleReload}
+                  disabled={reloading}
+                  className="text-foreground mr-5"
+                >
+                  {reloading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Reloading...
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw className="mr-2 h-4 w-4" />
+                      Reload
+                    </>
+                  )}
+                </Button>
+              )}
+            </div>
             <DialogDescription>
               {hasData ? "View historical data and add new measurements" : "No historical data available. Add your first measurement below."}
             </DialogDescription>
@@ -337,23 +472,64 @@ const MetricCard = ({
           </div>
           
           <form onSubmit={handleSubmit}>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="newValue" className="text-right">
-                New {safeTitle}:
-              </Label>
-              <Input
-                id="newValue"
-                type="number"
-                step="0.1"
-                className="col-span-2"
-                value={newValue}
-                onChange={(e) => setNewValue(e.target.value)}
-                placeholder={`Enter new ${safeTitle.toLowerCase()} value`}
-                disabled={submitting}
-                required
-              />
-              <span className="text-sm text-muted-foreground">{unit}</span>
-            </div>
+            {isBloodPressure ? (
+              // Blood pressure form with systolic and diastolic inputs
+              <div className="space-y-4">
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="systolic" className="text-right">
+                    Systolic:
+                  </Label>
+                  <Input
+                    id="systolic"
+                    type="number"
+                    step="1"
+                    className="col-span-2"
+                    value={systolicValue}
+                    onChange={(e) => setSystolicValue(e.target.value)}
+                    placeholder="Enter systolic pressure"
+                    disabled={submitting}
+                    required
+                  />
+                  <span className="text-sm text-muted-foreground">mmHg</span>
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="diastolic" className="text-right">
+                    Diastolic:
+                  </Label>
+                  <Input
+                    id="diastolic"
+                    type="number"
+                    step="1"
+                    className="col-span-2"
+                    value={diastolicValue}
+                    onChange={(e) => setDiastolicValue(e.target.value)}
+                    placeholder="Enter diastolic pressure"
+                    disabled={submitting}
+                    required
+                  />
+                  <span className="text-sm text-muted-foreground">mmHg</span>
+                </div>
+              </div>
+            ) : (
+              // Regular metric form with single input
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="newValue" className="text-right">
+                  New {safeTitle}:
+                </Label>
+                <Input
+                  id="newValue"
+                  type="number"
+                  step="0.1"
+                  className="col-span-2"
+                  value={newValue}
+                  onChange={(e) => setNewValue(e.target.value)}
+                  placeholder={`Enter new ${safeTitle.toLowerCase()} value`}
+                  disabled={submitting}
+                  required
+                />
+                <span className="text-sm text-muted-foreground">{unit}</span>
+              </div>
+            )}
             
             {submitSuccess && (
               <Alert className="bg-green-50 border-green-200 text-green-800 mt-4">
@@ -371,7 +547,13 @@ const MetricCard = ({
             )}
             
             <DialogFooter className="mt-4">
-              <Button type="submit" disabled={submitting || !newValue.trim()}>
+              <Button 
+                type="submit" 
+                disabled={
+                  submitting || 
+                  (isBloodPressure ? (!systolicValue.trim() || !diastolicValue.trim()) : !newValue.trim())
+                }
+              >
                 {submitting ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />

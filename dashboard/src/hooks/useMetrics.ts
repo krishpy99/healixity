@@ -17,8 +17,13 @@ export function useMetrics() {
     try {
       setState(prev => ({ ...prev, loading: true, error: null }));
       
-      // Validate input before sending
-      if (!metric || typeof metric.value !== 'number' || !metric.type || !metric.unit) {
+      // Validate input before sending - check for required fields properly
+      if (!metric || 
+          typeof metric.value !== 'number' || 
+          isNaN(metric.value) ||
+          !isFinite(metric.value) ||
+          !metric.type || 
+          metric.unit === undefined || metric.unit === null) {
         throw new Error('Invalid metric data provided');
       }
 
@@ -70,7 +75,13 @@ export function useMetrics() {
   // Validate health input with fallbacks
   const validateHealthInput = useCallback(async (input: HealthMetricInput): Promise<boolean> => {
     try {
-      if (!input || typeof input.value !== 'number' || !input.type) {
+      // Use the same validation logic as addMetric for consistency
+      if (!input || 
+          typeof input.value !== 'number' || 
+          isNaN(input.value) ||
+          !isFinite(input.value) ||
+          !input.type || 
+          input.unit === undefined || input.unit === null) {
         return false; // Basic client-side validation
       }
 

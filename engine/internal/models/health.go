@@ -10,6 +10,7 @@ import (
 // HealthMetric represents a single health data point
 type HealthMetric struct {
 	UserID    string    `json:"user_id" dynamodbav:"user_id"`
+	SortKey   string    `json:"sort_key" dynamodbav:"sort_key"`
 	Timestamp time.Time `json:"timestamp" dynamodbav:"timestamp"`
 	Type      string    `json:"type" dynamodbav:"metric_type"`
 	Value     float64   `json:"value" dynamodbav:"value"`
@@ -25,6 +26,27 @@ type HealthMetricInput struct {
 	Unit   string  `json:"unit" binding:"required"`
 	Notes  string  `json:"notes,omitempty"`
 	Source string  `json:"source,omitempty"`
+}
+
+// BloodPressureInput represents input for blood pressure with both systolic and diastolic values
+type BloodPressureInput struct {
+	Type      string  `json:"type" binding:"required"` // Should be "blood_pressure"
+	Systolic  float64 `json:"systolic" binding:"required"`
+	Diastolic float64 `json:"diastolic" binding:"required"`
+	Unit      string  `json:"unit" binding:"required"` // Should be "mmHg"
+	Notes     string  `json:"notes,omitempty"`
+	Source    string  `json:"source,omitempty"`
+}
+
+// CompositeHealthMetricInput represents input that can handle both regular and composite metrics
+type CompositeHealthMetricInput struct {
+	Type      string   `json:"type" binding:"required"`
+	Value     *float64 `json:"value,omitempty"`     // For regular metrics
+	Systolic  *float64 `json:"systolic,omitempty"`  // For blood pressure
+	Diastolic *float64 `json:"diastolic,omitempty"` // For blood pressure
+	Unit      string   `json:"unit" binding:"required"`
+	Notes     string   `json:"notes,omitempty"`
+	Source    string   `json:"source,omitempty"`
 }
 
 // HealthSummary represents a summary of health metrics
@@ -61,6 +83,12 @@ type DataPoint struct {
 
 // SupportedMetrics contains all supported health metric types
 var SupportedMetrics = map[string]MetricInfo{
+	"blood_pressure": {
+		Name:        "Blood Pressure",
+		Unit:        "mmHg",
+		Category:    "cardiovascular",
+		NormalRange: nil, // Special handling for composite metric
+	},
 	"blood_pressure_systolic": {
 		Name:        "Blood Pressure (Systolic)",
 		Unit:        "mmHg",
@@ -100,6 +128,18 @@ var SupportedMetrics = map[string]MetricInfo{
 		Unit:        "mg/dL",
 		Category:    "metabolic",
 		NormalRange: &Range{Min: 70, Max: 100},
+	},
+	"blood_oxygen_saturation": {
+		Name:        "Blood Oxygen Saturation (SpO2)",
+		Unit:        "%",
+		Category:    "respiratory",
+		NormalRange: &Range{Min: 95, Max: 100},
+	},
+	"body_temperature": {
+		Name:        "Body Temperature",
+		Unit:        "°C",
+		Category:    "vital_signs",
+		NormalRange: &Range{Min: 36.1, Max: 37.2},
 	},
 	"cholesterol_total": {
 		Name:        "Total Cholesterol",
@@ -179,7 +219,7 @@ func (h *HealthMetric) GetPartitionKey() string {
 	return h.UserID
 }
 
-// GetSortKey returns the sort key for DynamoDB (timestamp + metric type)
+// GetSortKey returns the sort key for DynamoDB (metric type + timestamp)
 func (h *HealthMetric) GetSortKey() string {
-	return h.Timestamp.Format("2006-01-02T15:04:05.000Z") + "#" + h.Type
+	return h.Type + "#" + h.Timestamp.Format("2006-01-02T15:04:05.000000Z")
 }

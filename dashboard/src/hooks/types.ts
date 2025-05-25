@@ -45,7 +45,7 @@ export interface MetricData {
   unit?: string;
   status: "normal" | "warning" | "alert";
   statusText: string;
-  data: number[];
+  data: number[] | { systolic: number[]; diastolic: number[] };
   color: string;
   trend?: 'up' | 'down' | 'stable';
 }
@@ -198,6 +198,7 @@ export type Severity = 'info' | 'warning' | 'error';
 
 // Metric type constants from engine
 export const METRIC_TYPES = {
+  BLOOD_PRESSURE: 'blood_pressure',
   BLOOD_PRESSURE_SYSTOLIC: 'blood_pressure_systolic',
   BLOOD_PRESSURE_DIASTOLIC: 'blood_pressure_diastolic',
   HEART_RATE: 'heart_rate',
@@ -205,6 +206,8 @@ export const METRIC_TYPES = {
   HEIGHT: 'height',
   BMI: 'bmi',
   BLOOD_GLUCOSE: 'blood_glucose',
+  BLOOD_OXYGEN_SATURATION: 'blood_oxygen_saturation',
+  BODY_TEMPERATURE: 'body_temperature',
   CHOLESTEROL_TOTAL: 'cholesterol_total',
   CHOLESTEROL_HDL: 'cholesterol_hdl',
   CHOLESTEROL_LDL: 'cholesterol_ldl',
@@ -214,4 +217,54 @@ export const METRIC_TYPES = {
   STEPS: 'steps',
 } as const;
 
-export type MetricType = typeof METRIC_TYPES[keyof typeof METRIC_TYPES]; 
+export type MetricType = typeof METRIC_TYPES[keyof typeof METRIC_TYPES];
+
+// Metric unit mapping based on backend SupportedMetrics
+export const METRIC_UNITS = {
+  [METRIC_TYPES.BLOOD_PRESSURE]: 'mmHg',
+  [METRIC_TYPES.HEART_RATE]: 'bpm',
+  [METRIC_TYPES.BLOOD_PRESSURE_SYSTOLIC]: 'mmHg',
+  [METRIC_TYPES.BLOOD_PRESSURE_DIASTOLIC]: 'mmHg',
+  [METRIC_TYPES.BMI]: 'kg/m²',
+  [METRIC_TYPES.BLOOD_GLUCOSE]: 'mg/dL',
+  [METRIC_TYPES.BLOOD_OXYGEN_SATURATION]: '%',
+  [METRIC_TYPES.BODY_TEMPERATURE]: '°C',
+  [METRIC_TYPES.WEIGHT]: 'kg',
+  [METRIC_TYPES.HEIGHT]: 'cm',
+  [METRIC_TYPES.CHOLESTEROL_TOTAL]: 'mg/dL',
+  [METRIC_TYPES.CHOLESTEROL_HDL]: 'mg/dL',
+  [METRIC_TYPES.CHOLESTEROL_LDL]: 'mg/dL',
+  [METRIC_TYPES.SLEEP_DURATION]: 'hours',
+  [METRIC_TYPES.EXERCISE_DURATION]: 'minutes',
+  [METRIC_TYPES.WATER_INTAKE]: 'liters',
+  [METRIC_TYPES.STEPS]: 'count',
+} as const;
+
+// Helper function to get the correct unit for a metric type
+export function getMetricUnit(metricType: string): string {
+  return METRIC_UNITS[metricType as keyof typeof METRIC_UNITS] || '';
+}
+
+// Helper function to get metric display name
+export function getMetricDisplayName(metricType: string): string {
+  const displayNames: Record<string, string> = {
+    [METRIC_TYPES.BLOOD_PRESSURE]: 'Blood Pressure',
+    [METRIC_TYPES.HEART_RATE]: 'Heart Rate',
+    [METRIC_TYPES.BLOOD_PRESSURE_SYSTOLIC]: 'Blood Pressure (Systolic)',
+    [METRIC_TYPES.BLOOD_PRESSURE_DIASTOLIC]: 'Blood Pressure (Diastolic)',
+    [METRIC_TYPES.BMI]: 'Body Mass Index',
+    [METRIC_TYPES.BLOOD_GLUCOSE]: 'Blood Glucose',
+    [METRIC_TYPES.BLOOD_OXYGEN_SATURATION]: 'Blood Oxygen Saturation (SpO2)',
+    [METRIC_TYPES.BODY_TEMPERATURE]: 'Body Temperature',
+    [METRIC_TYPES.WEIGHT]: 'Weight',
+    [METRIC_TYPES.HEIGHT]: 'Height',
+    [METRIC_TYPES.CHOLESTEROL_TOTAL]: 'Total Cholesterol',
+    [METRIC_TYPES.CHOLESTEROL_HDL]: 'HDL Cholesterol',
+    [METRIC_TYPES.CHOLESTEROL_LDL]: 'LDL Cholesterol',
+    [METRIC_TYPES.SLEEP_DURATION]: 'Sleep Duration',
+    [METRIC_TYPES.EXERCISE_DURATION]: 'Exercise Duration',
+    [METRIC_TYPES.WATER_INTAKE]: 'Water Intake',
+    [METRIC_TYPES.STEPS]: 'Steps',
+  };
+  return displayNames[metricType] || metricType;
+} 

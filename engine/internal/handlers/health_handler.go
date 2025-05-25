@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -68,6 +69,39 @@ func (h *HealthHandler) AddHealthData(c *gin.Context) {
 	utils.SuccessResponse(c, http.StatusCreated, "Health data saved successfully", metric)
 }
 
+// AddCompositeHealthData handles POST /api/health/metrics/composite
+func (h *HealthHandler) AddCompositeHealthData(c *gin.Context) {
+	userID := middleware.GetUserID(c)
+	if userID == "" {
+		utils.ErrorResponse(c, http.StatusUnauthorized, "User not authenticated")
+		return
+	}
+
+	var input models.CompositeHealthMetricInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		h.logger.Error("Failed to bind composite health metric input", zap.Error(err))
+		utils.ErrorResponse(c, http.StatusBadRequest, "Invalid input format")
+		return
+	}
+
+	// Add composite health data
+	result, err := h.healthService.AddCompositeHealthData(userID, &input)
+	if err != nil {
+		h.logger.Error("Failed to add composite health data",
+			zap.String("user_id", userID),
+			zap.String("metric_type", input.Type),
+			zap.Error(err))
+		utils.ErrorResponse(c, http.StatusInternalServerError, "Failed to save health data")
+		return
+	}
+
+	h.logger.Info("Composite health data added successfully",
+		zap.String("user_id", userID),
+		zap.String("metric_type", input.Type))
+
+	utils.SuccessResponse(c, http.StatusCreated, "Health data saved successfully", result)
+}
+
 // GetMetricHistory handles GET /api/health/metrics/:type
 func (h *HealthHandler) GetMetricHistory(c *gin.Context) {
 	userID := middleware.GetUserID(c)
@@ -81,6 +115,8 @@ func (h *HealthHandler) GetMetricHistory(c *gin.Context) {
 		utils.ErrorResponse(c, http.StatusBadRequest, "Metric type is required")
 		return
 	}
+
+	fmt.Println("metricType", metricType)
 
 	// Parse query parameters
 	startTimeStr := c.Query("start_time")

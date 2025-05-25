@@ -106,6 +106,7 @@ func main() {
 		healthRoutes.Use(middleware.RequireAuthWithTestMode(cfg))
 		{
 			healthRoutes.POST("/metrics", healthHandler.AddHealthData)
+			healthRoutes.POST("/metrics/composite", healthHandler.AddCompositeHealthData)
 			healthRoutes.GET("/metrics/:type", healthHandler.GetMetricHistory)
 			healthRoutes.GET("/latest", healthHandler.GetLatestMetrics)
 			healthRoutes.GET("/summary", healthHandler.GetHealthSummary)

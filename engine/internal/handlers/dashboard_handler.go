@@ -76,10 +76,8 @@ func (d *DashboardHandler) GetTrends(c *gin.Context) {
 			metricTypes[i] = strings.TrimSpace(mt)
 		}
 	} else {
-		// Default to key health metrics for dashboard
+		// Default to key health metrics for dashboard (excluding blood pressure for graphing)
 		metricTypes = []string{
-			"blood_pressure_systolic",
-			"blood_pressure_diastolic",
 			"heart_rate",
 			"weight",
 			"blood_glucose",
@@ -133,7 +131,6 @@ func (d *DashboardHandler) GetOverview(c *gin.Context) {
 
 	// Get recent trends (last 30 days)
 	recentTrends, err := d.healthService.GetHealthTrends(userID, []string{
-		"blood_pressure_systolic",
 		"heart_rate",
 		"weight",
 	}, "month")
