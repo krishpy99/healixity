@@ -1,89 +1,136 @@
 import { useState, useEffect, useCallback } from 'react';
-import { get, post } from './api';
-import { ChatMessage, SendMessagePayload } from './types';
+import { api } from '@/lib/api';
+import { ChatRequest, ChatResponse } from './types';
 
-/**
- * Custom hook for managing chat messages (list and send)
- */
+interface ChatState {
+  messages: Array<{
+    id: string;
+    message: string;
+    timestamp: string;
+    isUser: boolean;
+    senderName?: string;
+    sources?: string[];
+    tokensUsed?: number;
+  }>;
+  loading: boolean;
+  error: string | null;
+  sessionId?: string;
+}
+
 export function useChatMessages() {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [sending, setSending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [chatState, setChatState] = useState<ChatState>({
+    messages: [],
+    loading: false,
+    error: null
+  });
 
-  // Fetch chat messages
-  const fetchMessages = useCallback(async () => {
-    try {
-      setLoading(true);
-      const data = await get<ChatMessage[]>('/api/chat-messages');
-      setMessages(data);
-      setError(null);
-    } catch (err) {
-      console.error('Error fetching chat messages:', err);
-      setError('Failed to load messages');
-    } finally {
-      setLoading(false);
-    }
+  const addMessage = useCallback((message: ChatState['messages'][0]) => {
+    setChatState(prev => ({
+      ...prev,
+      messages: [...prev.messages, message]
+    }));
   }, []);
 
-  // Initial fetch
+  // Load chat history on mount
   useEffect(() => {
-    fetchMessages();
-  }, [fetchMessages]);
+    const loadChatHistory = async () => {
+      try {
+        console.log('🔄 useChatMessages: Loading chat history...');
+        const history = await api.chat.getChatHistory();
+        console.log('✅ useChatMessages: Chat history loaded successfully');
+        
+        // Transform chat history to message format
+        if (history.sessions && history.sessions.length > 0) {
+          // For now, just show we could load history
+          // In a full implementation, you'd transform the history data
+          console.log('Chat history loaded:', history);
+        }
+      } catch (error) {
+        console.error('❌ useChatMessages: Failed to load chat history:', error);
+      }
+    };
 
-  // Send a new message
-  const sendMessage = useCallback(async (messageText: string, isUser: boolean = true, senderName?: string) => {
-    if (!messageText.trim()) return null;
-    
-    setSending(true);
-    
-    // Create message object
-    const messagePayload: SendMessagePayload = {
-      message: messageText,
-      isUser,
-      senderName
-    };
-    
-    // Optimistically add message to UI
-    const optimisticMessage: ChatMessage = {
-      id: Date.now().toString(),
-      message: messageText,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      isUser,
-      senderName
-    };
-    
-    setMessages(prev => [...prev, optimisticMessage]);
-    
-    try {
-      // Send to API
-      const newMessage = await post<ChatMessage, SendMessagePayload>(
-        '/api/chat-messages', 
-        messagePayload
-      );
-      
-      // Replace optimistic message with actual server response if needed
-      // (In this case we might not need to, as our optimistic update is sufficient)
-      
-      setError(null);
-      return newMessage;
-    } catch (err) {
-      console.error('Error sending message:', err);
-      setError('Failed to send message');
-      
-      // You could remove the optimistic message here if desired
-      return null;
-    } finally {
-      setSending(false);
-    }
+    loadChatHistory();
   }, []);
 
-  return { 
-    messages, 
-    loading, 
-    sending, 
-    error,
+  const sendMessage = async (messageText: string) => {
+    if (!messageText.trim()) return;
+
+    // Add user message immediately
+    const userMessage = {
+      id: Math.random().toString(36).substr(2, 9),
+      message: messageText,
+      timestamp: new Date().toISOString(),
+      isUser: true,
+      senderName: 'You'
+    };
+
+    addMessage(userMessage);
+    setChatState(prev => ({ ...prev, loading: true, error: null }));
+
+    try {
+      // Send via REST API
+      const request: ChatRequest = {
+        message: messageText,
+        session_id: chatState.sessionId
+      };
+
+      const response = await api.chat.sendMessage(request);
+
+      // Update session ID if received
+      if (response.session_id) {
+        setChatState(prev => ({ ...prev, sessionId: response.session_id }));
+      }
+
+      // Add AI response
+      const aiMessage = {
+        id: response.id,
+        message: response.message,
+        timestamp: response.timestamp,
+        isUser: false,
+        senderName: 'Health Assistant',
+        tokensUsed: response.tokens_used
+      };
+
+      addMessage(aiMessage);
+
+    } catch (error) {
+      console.error('Failed to send message:', error);
+      
+      // Add error message
+      const errorMessage = {
+        id: Math.random().toString(36).substr(2, 9),
+        message: 'Sorry, I encountered an error processing your message. Please try again.',
+        timestamp: new Date().toISOString(),
+        isUser: false,
+        senderName: 'Health Assistant'
+      };
+
+      addMessage(errorMessage);
+      
+      setChatState(prev => ({ 
+        ...prev, 
+        error: error instanceof Error ? error.message : 'Failed to send message'
+      }));
+    } finally {
+      setChatState(prev => ({ ...prev, loading: false }));
+    }
+  };
+
+  const clearMessages = () => {
+    setChatState(prev => ({
+      ...prev,
+      messages: [],
+      error: null
+    }));
+  };
+
+  return {
+    messages: chatState.messages,
+    loading: chatState.loading,
+    error: chatState.error,
+    sessionId: chatState.sessionId,
     sendMessage,
-    refreshMessages: fetchMessages
+    clearMessages
   };
 } 

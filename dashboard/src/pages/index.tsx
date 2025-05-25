@@ -13,11 +13,29 @@ import {
   Gauge,
   BarChart,
 } from "lucide-react";
-import { useDashboardData } from "@/hooks";
+import { useDashboardData, useMetrics } from "@/hooks";
 
 export default function Dashboard() {
   // Use our composite hook that combines all dashboard data
   const { metrics, recoveryChartData, loading, error } = useDashboardData();
+  
+  // Get addMetric function to pass to MetricCard components
+  const { addMetric } = useMetrics();
+  
+  // Create a simplified addMetric function for MetricCard
+  const handleAddMetric = async (type: string, value: number, unit: string): Promise<boolean> => {
+    try {
+      const result = await addMetric({
+        type,
+        value,
+        unit
+      });
+      return !!result;
+    } catch (error) {
+      console.error('Failed to add metric:', error);
+      return false;
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background p-4 md:p-6">
@@ -63,6 +81,7 @@ export default function Dashboard() {
                     data={metrics.heartRate.data}
                     color={metrics.heartRate.color}
                     icon={<Heart className="h-4 w-4 text-red-500" />}
+                    onAddMetric={handleAddMetric}
                   />
                   <MetricCard
                     title="Blood Pressure"
@@ -72,6 +91,7 @@ export default function Dashboard() {
                     data={metrics.bloodPressure.data}
                     color={metrics.bloodPressure.color}
                     icon={<Activity className="h-4 w-4 text-blue-500" />}
+                    onAddMetric={handleAddMetric}
                   />
                   <MetricCard
                     title="BMI"
@@ -81,6 +101,7 @@ export default function Dashboard() {
                     data={metrics.bmi.data}
                     color={metrics.bmi.color}
                     icon={<Gauge className="h-4 w-4 text-purple-500" />}
+                    onAddMetric={handleAddMetric}
                   />
                   <MetricCard
                     title="SpO2"
@@ -91,6 +112,7 @@ export default function Dashboard() {
                     data={metrics.spo2.data}
                     color={metrics.spo2.color}
                     icon={<Droplet className="h-4 w-4 text-green-500" />}
+                    onAddMetric={handleAddMetric}
                   />
                   <MetricCard
                     title="Temperature"
@@ -101,6 +123,7 @@ export default function Dashboard() {
                     data={metrics.temperature.data}
                     color={metrics.temperature.color}
                     icon={<Thermometer className="h-4 w-4 text-amber-500" />}
+                    onAddMetric={handleAddMetric}
                   />
                   <MetricCard
                     title="Blood Sugar"
@@ -111,6 +134,7 @@ export default function Dashboard() {
                     data={metrics.bloodSugar.data}
                     color={metrics.bloodSugar.color}
                     icon={<Droplet className="h-4 w-4 text-blue-500" />}
+                    onAddMetric={handleAddMetric}
                   />
                 </>
               )}

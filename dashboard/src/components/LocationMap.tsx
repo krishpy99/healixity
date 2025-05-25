@@ -1,6 +1,5 @@
 import React from 'react';
 import Image from 'next/image';
-import DummyImage from './DummyImage';
 import { Card } from '@/components/ui/card';
 
 interface LocationMapProps {
@@ -23,13 +22,9 @@ const LocationMap: React.FC<LocationMapProps> = ({
             className="object-cover"
           />
         ) : (
-          <DummyImage 
-            width={400} 
-            height={144} 
-            text="Map" 
-            bgColor="#e2e8f0" 
-            className="w-full h-full"
-          />
+          <div className="w-full h-full bg-slate-200 flex items-center justify-center text-slate-500">
+            Map
+          </div>
         )}
         <div className="absolute bottom-2 right-2 bg-background p-1 rounded-full">
           <div className="w-6 h-6 bg-red-500 rounded-full flex items-center justify-center">

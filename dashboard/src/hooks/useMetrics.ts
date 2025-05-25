@@ -1,32 +1,116 @@
-import { useState, useEffect } from 'react';
-import { get } from './api';
-import { MetricsData } from './types';
+import { useState, useCallback } from 'react';
+import { api, HealthMetric, HealthMetricInput, LatestMetric, HealthSummary, HealthTrend } from '@/lib/api';
 
-/**
- * Custom hook for fetching health metrics data
- */
+interface MetricsState {
+  loading: boolean;
+  error: string | null;
+}
+
 export function useMetrics() {
-  const [metrics, setMetrics] = useState<MetricsData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [state, setState] = useState<MetricsState>({
+    loading: false,
+    error: null
+  });
 
-  useEffect(() => {
-    const fetchMetrics = async () => {
-      try {
-        setLoading(true);
-        const data = await get<MetricsData>('/api/metrics');
-        setMetrics(data);
-        setError(null);
-      } catch (err) {
-        console.error('Error fetching metrics:', err);
-        setError('Failed to load health metrics');
-      } finally {
-        setLoading(false);
+  // Add health metric with validation and fallbacks
+  const addMetric = useCallback(async (metric: HealthMetricInput): Promise<HealthMetric | null> => {
+    try {
+      setState(prev => ({ ...prev, loading: true, error: null }));
+      
+      // Validate input before sending
+      if (!metric || typeof metric.value !== 'number' || !metric.type || !metric.unit) {
+        throw new Error('Invalid metric data provided');
       }
-    };
 
-    fetchMetrics();
+      const newMetric = await api.health.addMetric(metric);
+      
+      setState(prev => ({ ...prev, loading: false }));
+      return newMetric || null;
+    } catch (error) {
+      console.error('Failed to add metric:', error);
+      setState(prev => ({
+        ...prev,
+        loading: false,
+        error: error instanceof Error ? error.message : 'Failed to add metric'
+      }));
+      return null;
+    }
   }, []);
 
-  return { metrics, loading, error };
+  // Get metric history with fallbacks (on-demand only)
+  const getMetricHistory = useCallback(async (
+    type: string,
+    params?: {
+      start_time?: string;
+      end_time?: string;
+      limit?: number;
+    }
+  ): Promise<HealthMetric[]> => {
+    try {
+      if (!type) {
+        throw new Error('Metric type is required');
+      }
+
+      setState(prev => ({ ...prev, loading: true, error: null }));
+      const response = await api.health.getMetricHistory(type, params);
+      setState(prev => ({ ...prev, loading: false }));
+      
+      return Array.isArray(response?.metrics) ? response.metrics : [];
+    } catch (error) {
+      console.error('Failed to fetch metric history:', error);
+      setState(prev => ({
+        ...prev,
+        loading: false,
+        error: error instanceof Error ? error.message : 'Failed to load metric history'
+      }));
+      return []; // Fallback to empty array
+    }
+  }, []);
+
+  // Validate health input with fallbacks
+  const validateHealthInput = useCallback(async (input: HealthMetricInput): Promise<boolean> => {
+    try {
+      if (!input || typeof input.value !== 'number' || !input.type) {
+        return false; // Basic client-side validation
+      }
+
+      const response = await api.health.validateHealthInput(input);
+      return response?.valid === true;
+    } catch (error) {
+      console.error('Failed to validate health input:', error);
+      return false; // Fallback to false for safety
+    }
+  }, []);
+
+  // Delete metric with fallbacks
+  const deleteMetric = useCallback(async (type: string, timestamp: string): Promise<boolean> => {
+    try {
+      if (!type || !timestamp) {
+        throw new Error('Type and timestamp are required');
+      }
+
+      setState(prev => ({ ...prev, loading: true, error: null }));
+      await api.health.deleteMetric(type, timestamp);
+      setState(prev => ({ ...prev, loading: false }));
+      
+      return true;
+    } catch (error) {
+      console.error('Failed to delete metric:', error);
+      setState(prev => ({
+        ...prev,
+        loading: false,
+        error: error instanceof Error ? error.message : 'Failed to delete metric'
+      }));
+      return false;
+    }
+  }, []);
+
+  return {
+    loading: state.loading,
+    error: state.error,
+    addMetric,
+    getMetricHistory,
+    validateHealthInput,
+    deleteMetric
+  };
 } 
