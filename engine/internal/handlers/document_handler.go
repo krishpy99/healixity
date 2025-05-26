@@ -77,7 +77,7 @@ func (d *DocumentHandler) UploadDocument(c *gin.Context) {
 
 	d.logger.Info("Document uploaded successfully",
 		zap.String("user_id", userID),
-		zap.String("document_id", response.DocumentID),
+		zap.String("document_id", response.Document.DocumentID),
 		zap.String("filename", file.Filename))
 
 	utils.SuccessResponse(c, http.StatusCreated, "Document uploaded successfully", response)
@@ -255,5 +255,56 @@ func (d *DocumentHandler) SearchDocuments(c *gin.Context) {
 		"query":   query,
 		"results": sources,
 		"count":   len(sources),
+	})
+}
+
+// GetDocumentViewURL handles GET /api/documents/:id/view
+func (d *DocumentHandler) GetDocumentViewURL(c *gin.Context) {
+	userID := middleware.GetUserID(c)
+	if userID == "" {
+		utils.ErrorResponse(c, http.StatusUnauthorized, "User not authenticated")
+		return
+	}
+
+	documentID := c.Param("id")
+	if documentID == "" {
+		utils.ErrorResponse(c, http.StatusBadRequest, "Document ID is required")
+		return
+	}
+
+	// Get document to verify ownership and get S3 key
+	document, err := d.documentService.GetDocument(userID, documentID)
+	if err != nil {
+		d.logger.Error("Failed to get document for viewing",
+			zap.String("user_id", userID),
+			zap.String("document_id", documentID),
+			zap.Error(err))
+		utils.ErrorResponse(c, http.StatusNotFound, "Document not found")
+		return
+	}
+
+	// Generate presigned URL for viewing (valid for 1 hour)
+	viewURL, err := d.documentService.GetDocumentViewURL(userID, documentID, 60)
+	if err != nil {
+		d.logger.Error("Failed to generate document view URL",
+			zap.String("user_id", userID),
+			zap.String("document_id", documentID),
+			zap.Error(err))
+		utils.ErrorResponse(c, http.StatusInternalServerError, "Failed to generate view URL")
+		return
+	}
+
+	d.logger.Info("Document view URL generated",
+		zap.String("user_id", userID),
+		zap.String("document_id", documentID),
+		zap.String("content_type", document.ContentType))
+
+	utils.SuccessResponse(c, http.StatusOK, "Document view URL generated successfully", gin.H{
+		"document_id":  documentID,
+		"view_url":     viewURL,
+		"content_type": document.ContentType,
+		"file_name":    document.FileName,
+		"title":        document.Title,
+		"expires_in":   3600, // 1 hour in seconds
 	})
 }

@@ -38,10 +38,15 @@ func (d *DocumentService) UploadDocument(userID string, file *multipart.FileHead
 		return nil, err
 	}
 
-	// Create document record
+	// Get content type from file header
+	contentType := file.Header.Get("Content-Type")
+	if contentType == "" {
+		contentType = "application/octet-stream"
+	}
+
+	// Create document record with new structure
 	fileType := strings.ToLower(filepath.Ext(file.Filename)[1:])
-	document := models.NewDocument(userID, request.Title, file.Filename, fileType, file.Size)
-	document.Category = request.Category
+	document := models.NewDocument(userID, request.Title, file.Filename, fileType, contentType, request.Category, file.Size)
 	document.Description = request.Description
 	document.Tags = request.Tags
 	document.SetS3Key(d.cfg.S3Bucket)
@@ -58,12 +63,16 @@ func (d *DocumentService) UploadDocument(userID string, file *multipart.FileHead
 		"document_id": &document.DocumentID,
 		"title":       &request.Title,
 		"file_type":   &fileType,
+		"category":    &request.Category,
 	}
 
-	_, err = d.s3Client.UploadFile(document.S3Key, fileReader, file.Header.Get("Content-Type"), metadata)
+	s3URL, err := d.s3Client.UploadFile(document.S3Key, fileReader, contentType, metadata)
 	if err != nil {
 		return nil, fmt.Errorf("failed to upload file to S3: %w", err)
 	}
+
+	// Set the S3 URL in the document
+	document.SetS3URL(s3URL)
 
 	// Save document metadata to database
 	if err := d.db.PutDocument(document); err != nil {
@@ -73,9 +82,9 @@ func (d *DocumentService) UploadDocument(userID string, file *multipart.FileHead
 	}
 
 	return &models.DocumentUploadResponse{
-		DocumentID: document.DocumentID,
-		Status:     models.StatusUploaded,
-		Message:    "Document uploaded successfully",
+		Document: document,
+		Status:   models.StatusUploaded,
+		Message:  "Document uploaded successfully",
 	}, nil
 }
 
@@ -180,6 +189,16 @@ func (d *DocumentService) GetDocumentContent(userID, documentID string) ([]byte,
 	}
 
 	return d.s3Client.DownloadFile(document.S3Key)
+}
+
+// GetDocumentViewURL generates a presigned URL for viewing a document
+func (d *DocumentService) GetDocumentViewURL(userID, documentID string, expirationMinutes int) (string, error) {
+	document, err := d.db.GetDocument(userID, documentID)
+	if err != nil {
+		return "", fmt.Errorf("failed to get document: %w", err)
+	}
+
+	return d.s3Client.GeneratePresignedURL(document.S3Key, expirationMinutes)
 }
 
 // validateFile validates the uploaded file

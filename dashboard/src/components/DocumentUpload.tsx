@@ -5,20 +5,27 @@ import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Alert, AlertDescription } from "./ui/alert";
-import { Loader2, CheckCircle, FileText, Trash2, Eye } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "./ui/dialog";
+import { Loader2, CheckCircle, FileText, Trash2, Eye, MoreHorizontal, Settings } from "lucide-react";
 import { useDocuments } from "@/hooks";
 import { DocumentUploadRequest } from "@/hooks/types";
 import { config } from "@/lib/config";
+import DocumentViewer from "./DocumentViewer";
 
 const DocumentUpload: React.FC = () => {
   const { 
-    documents, 
+    recentDocuments,
+    documents,
     loading, 
     uploading, 
     error, 
+    hasMore,
     uploadDocument,
     deleteDocument,
-    processDocument
+    processDocument,
+    getDocumentViewURL,
+    fetchAllDocuments,
+    loadMore
   } = useDocuments();
   
   const [file, setFile] = useState<File | null>(null);
@@ -28,6 +35,10 @@ const DocumentUpload: React.FC = () => {
     description: ''
   });
   const [uploadSuccess, setUploadSuccess] = useState(false);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalLoading, setModalLoading] = useState(false);
+  const [viewerOpen, setViewerOpen] = useState(false);
+  const [selectedDocumentId, setSelectedDocumentId] = useState<string | null>(null);
 
   const handleFileChange = (selectedFile: File | null) => {
     setFile(selectedFile);
@@ -61,6 +72,20 @@ const DocumentUpload: React.FC = () => {
 
   const handleProcess = async (documentId: string) => {
     await processDocument(documentId);
+  };
+
+  const handleView = (documentId: string) => {
+    setSelectedDocumentId(documentId);
+    setViewerOpen(true);
+  };
+
+  const handleViewMore = async () => {
+    setModalOpen(true);
+    if (documents.length === 0) {
+      setModalLoading(true);
+      await fetchAllDocuments();
+      setModalLoading(false);
+    }
   };
 
   // Format file size with fallback
@@ -98,8 +123,8 @@ const DocumentUpload: React.FC = () => {
   };
 
   // Get processing status badge with fallback
-  const getProcessingStatus = (processed: boolean | undefined, status?: string) => {
-    if (processed === true) {
+  const getProcessingStatus = (status: string | undefined) => {
+    if (status === 'processed') {
       return <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">Processed</span>;
     }
     if (status === 'processing') {
@@ -108,8 +133,66 @@ const DocumentUpload: React.FC = () => {
     return <span className="text-xs bg-gray-100 text-gray-800 px-2 py-1 rounded">Pending</span>;
   };
 
+  // Document row component
+  const DocumentRow = ({ doc, showActions = true }: { doc: any, showActions?: boolean }) => (
+    <div className="flex items-center p-3 border rounded-md bg-muted/30 hover:bg-muted/50 transition-colors">
+      <FileText className={`h-8 w-8 mr-3 flex-shrink-0 ${getFileTypeColor(doc?.content_type)}`} />
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium truncate">{doc?.title || 'Untitled Document'}</p>
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <span className="truncate">
+            {formatFileSize(doc?.file_size)}
+          </span>
+          <span>•</span>
+          <span>{formatDate(doc?.upload_time)}</span>
+          <span>•</span>
+          <span className="capitalize">{(doc?.category || 'unknown').replace(/_/g, ' ')}</span>
+        </div>
+        <div className="mt-1">
+          {getProcessingStatus(doc?.status)}
+        </div>
+      </div>
+      {showActions && (
+        <div className="flex gap-1 flex-shrink-0">
+          {doc?.document_id && (
+            <Button 
+              variant="ghost" 
+              size="sm"
+              onClick={() => handleView(doc.document_id)}
+              title="View document"
+            >
+              <Eye className="h-3 w-3" />
+            </Button>
+          )}
+          {doc?.status !== 'processed' && doc?.document_id && (
+            <Button 
+              variant="ghost" 
+              size="sm"
+              onClick={() => handleProcess(doc.document_id)}
+              title="Process document"
+            >
+              <Settings className="h-3 w-3" />
+            </Button>
+          )}
+          {doc?.document_id && (
+            <Button 
+              variant="ghost" 
+              size="sm"
+              onClick={() => handleDelete(doc.document_id)}
+              title="Delete document"
+              className="text-red-600 hover:text-red-700"
+            >
+              <Trash2 className="h-3 w-3" />
+            </Button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+
   // Safe documents array with fallback
-  const safeDocuments = Array.isArray(documents) ? documents : [];
+  const safeRecentDocuments = Array.isArray(recentDocuments) ? recentDocuments : [];
+  const safeAllDocuments = Array.isArray(documents) ? documents : [];
 
   return (
     <Card className="shadow-md h-full">
@@ -126,10 +209,20 @@ const DocumentUpload: React.FC = () => {
             handleUpload();
           }}>
             <div className="space-y-3">
-              <FileInput
-                onFileChange={handleFileChange}
-                accept={config.documents.allowedTypes.join(',')}
-              />
+              <div>
+                <FileInput
+                  onFileChange={handleFileChange}
+                  accept={config.documents.allowedTypes.join(',')}
+                  maxSize={config.documents.maxFileSize / (1024 * 1024)} // Convert bytes to MB
+                  showAcceptedTypes={true}
+                  acceptedTypesLabel={`Accepted file types: ${config.documents.allowedTypes.map(type => {
+                    if (type === 'application/pdf') return 'PDF';
+                    if (type === 'text/plain') return 'Text';
+                    if (type === 'text/markdown') return 'Markdown';
+                    return type;
+                  }).join(', ')} • Max size: ${Math.round(config.documents.maxFileSize / (1024 * 1024))}MB`}
+                />
+              </div>
               
               {file && (
                 <>
@@ -159,6 +252,11 @@ const DocumentUpload: React.FC = () => {
                         </option>
                       ))}
                     </select>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Available categories: {config.documents.categories.map(cat => 
+                        cat.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
+                      ).join(', ')}
+                    </p>
                   </div>
                   
                   <div>
@@ -174,18 +272,20 @@ const DocumentUpload: React.FC = () => {
               )}
             </div>
             
-            <Button 
-              type="submit" 
-              className="w-full mt-4"
-              disabled={!file || !metadata.title || !metadata.category || uploading}
-            >
-              {uploading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Uploading...
-                </>
-              ) : "Upload Document"}
-            </Button>
+            {file && (
+              <Button 
+                type="submit" 
+                className="w-full mt-4"
+                disabled={!file || !metadata.title || !metadata.category || uploading}
+              >
+                {uploading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Uploading...
+                  </>
+                ) : "Upload Document"}
+              </Button>
+            )}
           </form>
         </div>
 
@@ -203,65 +303,83 @@ const DocumentUpload: React.FC = () => {
         )}
 
         <div>
-          <h3 className="text-sm font-medium mb-2">Your Documents</h3>
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-sm font-medium">Recent Documents</h3>
+            {safeRecentDocuments.length > 0 && (
+              <Dialog open={modalOpen} onOpenChange={setModalOpen}>
+                <DialogTrigger asChild>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={handleViewMore}
+                    className="text-xs"
+                  >
+                    <MoreHorizontal className="h-3 w-3 mr-1" />
+                    View All
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-4xl max-h-[80vh]">
+                  <DialogHeader>
+                    <DialogTitle>All Documents</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-2 max-h-[60vh] overflow-y-auto pr-2">
+                    {modalLoading ? (
+                      <div className="flex justify-center p-8">
+                        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                      </div>
+                    ) : safeAllDocuments.length === 0 ? (
+                      <p className="text-center text-muted-foreground text-sm py-8">No documents found.</p>
+                    ) : (
+                      <>
+                        {safeAllDocuments.map((doc) => (
+                          <DocumentRow key={doc?.document_id || Math.random().toString(36)} doc={doc} />
+                        ))}
+                        {hasMore && (
+                          <div className="flex justify-center pt-4">
+                            <Button 
+                              variant="outline" 
+                              onClick={loadMore}
+                              disabled={loading}
+                            >
+                              {loading ? (
+                                <>
+                                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                  Loading...
+                                </>
+                              ) : "Load More"}
+                            </Button>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                </DialogContent>
+              </Dialog>
+            )}
+          </div>
           <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2">
             {loading ? (
               <div className="flex justify-center p-4">
                 <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
               </div>
-            ) : safeDocuments.length === 0 ? (
+            ) : safeRecentDocuments.length === 0 ? (
               <p className="text-center text-muted-foreground text-sm py-4">No documents uploaded yet.</p>
             ) : (
-              safeDocuments.map((doc) => (
-                <div
-                  key={doc?.id || Math.random().toString(36)}
-                  className="flex items-center p-3 border rounded-md bg-muted/30 hover:bg-muted/50 transition-colors"
-                >
-                  <FileText className={`h-8 w-8 mr-3 flex-shrink-0 ${getFileTypeColor(doc?.content_type)}`} />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{doc?.title || 'Untitled Document'}</p>
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <span className="truncate">
-                        {formatFileSize(doc?.file_size)}
-                      </span>
-                      <span>•</span>
-                      <span>{formatDate(doc?.upload_date)}</span>
-                      <span>•</span>
-                      <span className="capitalize">{(doc?.category || 'unknown').replace(/_/g, ' ')}</span>
-                    </div>
-                    <div className="mt-1">
-                      {getProcessingStatus(doc?.processed, doc?.processing_status)}
-                    </div>
-                  </div>
-                  <div className="flex gap-1 flex-shrink-0">
-                    {!doc?.processed && doc?.id && (
-                      <Button 
-                        variant="ghost" 
-                        size="sm"
-                        onClick={() => handleProcess(doc.id)}
-                        title="Process document"
-                      >
-                        <Eye className="h-3 w-3" />
-                      </Button>
-                    )}
-                    {doc?.id && (
-                      <Button 
-                        variant="ghost" 
-                        size="sm"
-                        onClick={() => handleDelete(doc.id)}
-                        title="Delete document"
-                        className="text-red-600 hover:text-red-700"
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </Button>
-                    )}
-                  </div>
-                </div>
+              safeRecentDocuments.map((doc) => (
+                <DocumentRow key={doc?.document_id || Math.random().toString(36)} doc={doc} />
               ))
             )}
           </div>
         </div>
       </CardContent>
+
+      {/* Document Viewer Modal */}
+      <DocumentViewer
+        isOpen={viewerOpen}
+        onClose={() => setViewerOpen(false)}
+        documentId={selectedDocumentId}
+        getDocumentViewURL={getDocumentViewURL}
+      />
     </Card>
   );
 };

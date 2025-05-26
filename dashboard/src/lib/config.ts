@@ -53,15 +53,14 @@ export const config = {
     allowedTypes: [
       'application/pdf',
       'text/plain',
-      'image/jpeg',
-      'image/png',
+      'text/markdown',
     ],
     categories: [
       'lab_results',
-      'prescriptions',
-      'medical_reports',
+      'prescription',
+      'medical_report',
       'insurance',
-      'other',
+      'general',
     ],
   },
   

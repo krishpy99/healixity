@@ -33,9 +33,13 @@ async function apiRequest<T>(
   
   // Default headers
   const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
     ...(options.headers as Record<string, string>),
   };
+
+  // Only set Content-Type to application/json if body is not FormData
+  if (!(options.body instanceof FormData)) {
+    headers['Content-Type'] = 'application/json';
+  }
 
   // Add auth token if not in test mode
   if (!TEST_MODE) {
@@ -290,18 +294,24 @@ export const dashboardApi = {
 
 // Document API
 export interface Document {
-  id: string;
   user_id: string;
+  sort_key: string;
+  document_id: string;
   title: string;
+  file_name: string;
+  file_type: string;
+  content_type: string;
+  file_size: number;
+  s3_key: string;
+  s3_url?: string;
+  upload_time: string;
+  processed_at?: string;
+  status: string;
+  chunk_count: number;
+  tags?: string[];
   category: string;
   description?: string;
-  filename: string;
-  file_size: number;
-  content_type: string;
-  upload_date: string;
-  processed: boolean;
-  processing_status?: string;
-  s3_key: string;
+  error_message?: string;
 }
 
 export interface DocumentUploadRequest {
@@ -311,8 +321,8 @@ export interface DocumentUploadRequest {
 }
 
 export interface DocumentUploadResponse {
-  document_id: string;
-  upload_url?: string;
+  document: Document;
+  status: string;
   message: string;
 }
 
@@ -374,6 +384,17 @@ export const documentApi = {
     
     return apiRequest(`/api/documents/search?${queryParams.toString()}`);
   },
+
+  // Get document view URL
+  getDocumentViewURL: (id: string): Promise<{
+    document_id: string;
+    view_url: string;
+    content_type: string;
+    file_name: string;
+    title: string;
+    expires_in: number;
+  }> =>
+    apiRequest(`/api/documents/${id}/view`),
 };
 
 // Chat API

@@ -123,8 +123,9 @@ func main() {
 			documentRoutes.POST("/upload", documentHandler.UploadDocument)
 			documentRoutes.GET("", documentHandler.ListDocuments)
 			documentRoutes.GET("/:id", documentHandler.GetDocument)
-			documentRoutes.DELETE("/:id", documentHandler.DeleteDocument)
+			documentRoutes.GET("/:id/view", documentHandler.GetDocumentViewURL)
 			documentRoutes.POST("/:id/process", documentHandler.ProcessDocument)
+			documentRoutes.DELETE("/:id", documentHandler.DeleteDocument)
 			documentRoutes.GET("/search", documentHandler.SearchDocuments)
 		}
 

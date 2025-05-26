@@ -1,6 +1,7 @@
 package models
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/aws/aws-sdk-go/service/dynamodb"
@@ -11,18 +12,21 @@ import (
 // Document represents a health document stored in the system
 type Document struct {
 	UserID       string    `json:"user_id" dynamodbav:"user_id"`
+	SortKey      string    `json:"sort_key" dynamodbav:"sort_key"` // category#timestamp
 	DocumentID   string    `json:"document_id" dynamodbav:"document_id"`
 	Title        string    `json:"title" dynamodbav:"title"`
 	FileName     string    `json:"file_name" dynamodbav:"file_name"`
 	FileType     string    `json:"file_type" dynamodbav:"file_type"`
+	ContentType  string    `json:"content_type" dynamodbav:"content_type"`
 	FileSize     int64     `json:"file_size" dynamodbav:"file_size"`
 	S3Key        string    `json:"s3_key" dynamodbav:"s3_key"`
+	S3URL        string    `json:"s3_url,omitempty" dynamodbav:"s3_url,omitempty"`
 	UploadTime   time.Time `json:"upload_time" dynamodbav:"upload_time"`
 	ProcessedAt  time.Time `json:"processed_at,omitempty" dynamodbav:"processed_at,omitempty"`
 	Status       string    `json:"status" dynamodbav:"status"` // "uploaded", "processing", "processed", "failed"
 	ChunkCount   int       `json:"chunk_count" dynamodbav:"chunk_count"`
 	Tags         []string  `json:"tags,omitempty" dynamodbav:"tags,omitempty"`
-	Category     string    `json:"category,omitempty" dynamodbav:"category,omitempty"`
+	Category     string    `json:"category" dynamodbav:"category"`
 	Description  string    `json:"description,omitempty" dynamodbav:"description,omitempty"`
 	ErrorMessage string    `json:"error_message,omitempty" dynamodbav:"error_message,omitempty"`
 }
@@ -56,9 +60,9 @@ type DocumentListResponse struct {
 
 // DocumentUploadResponse represents response after document upload
 type DocumentUploadResponse struct {
-	DocumentID string `json:"document_id"`
-	Status     string `json:"status"`
-	Message    string `json:"message"`
+	Document *Document `json:"document"`
+	Status   string    `json:"status"`
+	Message  string    `json:"message"`
 }
 
 // DocumentStatus constants
@@ -79,17 +83,23 @@ const (
 )
 
 // NewDocument creates a new document instance
-func NewDocument(userID, title, fileName, fileType string, fileSize int64) *Document {
+func NewDocument(userID, title, fileName, fileType, contentType, category string, fileSize int64) *Document {
+	now := time.Now()
+	timestamp := now.Unix()
+
 	return &Document{
-		UserID:     userID,
-		DocumentID: uuid.New().String(),
-		Title:      title,
-		FileName:   fileName,
-		FileType:   fileType,
-		FileSize:   fileSize,
-		UploadTime: time.Now(),
-		Status:     StatusUploaded,
-		ChunkCount: 0,
+		UserID:      userID,
+		SortKey:     fmt.Sprintf("%s#%d", category, timestamp),
+		DocumentID:  uuid.New().String(),
+		Title:       title,
+		FileName:    fileName,
+		FileType:    fileType,
+		ContentType: contentType,
+		FileSize:    fileSize,
+		Category:    category,
+		UploadTime:  now,
+		Status:      StatusUploaded,
+		ChunkCount:  0,
 	}
 }
 
@@ -122,12 +132,18 @@ func (d *Document) GetPartitionKey() string {
 
 // GetSortKey returns the sort key for DynamoDB
 func (d *Document) GetSortKey() string {
-	return d.DocumentID
+	// Use the actual sort_key field which has format category#timestamp
+	return d.SortKey
 }
 
 // SetS3Key sets the S3 key for the document
 func (d *Document) SetS3Key(bucket string) {
-	d.S3Key = d.UserID + "/" + d.DocumentID + "/" + d.FileName
+	d.S3Key = fmt.Sprintf("%s/%s/%s", d.UserID, d.DocumentID, d.FileName)
+}
+
+// SetS3URL sets the S3 URL for the document
+func (d *Document) SetS3URL(url string) {
+	d.S3URL = url
 }
 
 // IsProcessed checks if the document has been processed

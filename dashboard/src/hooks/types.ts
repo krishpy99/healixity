@@ -83,18 +83,24 @@ export interface RecoveryChartData {
 
 // Documents from Engine API
 export interface Document {
-  id: string;
   user_id: string;
+  sort_key: string;
+  document_id: string;
   title: string;
+  file_name: string;
+  file_type: string;
+  content_type: string;
+  file_size: number;
+  s3_key: string;
+  s3_url?: string;
+  upload_time: string;
+  processed_at?: string;
+  status: string;
+  chunk_count: number;
+  tags?: string[];
   category: string;
   description?: string;
-  filename: string;
-  file_size: number;
-  content_type: string;
-  upload_date: string;
-  processed: boolean;
-  processing_status?: string;
-  s3_key: string;
+  error_message?: string;
 }
 
 export interface DocumentUploadRequest {
@@ -104,8 +110,8 @@ export interface DocumentUploadRequest {
 }
 
 export interface DocumentUploadResponse {
-  document_id: string;
-  upload_url?: string;
+  document: Document;
+  status: string;
   message: string;
 }
 

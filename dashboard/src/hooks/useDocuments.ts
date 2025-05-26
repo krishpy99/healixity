@@ -4,6 +4,7 @@ import { Document, DocumentUploadRequest, DocumentUploadResponse } from './types
 
 interface DocumentsState {
   documents: Document[];
+  recentDocuments: Document[];
   loading: boolean;
   uploading: boolean;
   error: string | null;
@@ -17,23 +18,51 @@ interface DocumentsState {
 export function useDocuments() {
   const [state, setState] = useState<DocumentsState>({
     documents: [],
+    recentDocuments: [],
     loading: true,
     uploading: false,
     error: null,
     hasMore: false
   });
 
-  // Fetch documents
-  const fetchDocuments = useCallback(async (cursor?: string, append = false) => {
+  // Fetch recent documents (top 5)
+  const fetchRecentDocuments = useCallback(async () => {
     try {
-      console.log('🔄 useDocuments: Fetching documents...', { cursor, append });
+      console.log('🔄 useDocuments: Fetching recent documents...');
+      setState(prev => ({ ...prev, loading: true, error: null }));
+      
+      const response = await api.documents.listDocuments({
+        limit: 5
+      });
+      console.log('✅ useDocuments: Recent documents fetched successfully', { count: response.documents ? response.documents.length : 0 });
+
+      setState(prev => ({
+        ...prev,
+        recentDocuments: response.documents || [],
+        loading: false
+      }));
+
+    } catch (error) {
+      console.error('❌ useDocuments: Failed to fetch recent documents:', error);
+      setState(prev => ({
+        ...prev,
+        error: error instanceof Error ? error.message : 'Failed to load documents',
+        loading: false
+      }));
+    }
+  }, []);
+
+  // Fetch all documents (for modal)
+  const fetchAllDocuments = useCallback(async (cursor?: string, append = false) => {
+    try {
+      console.log('🔄 useDocuments: Fetching all documents...', { cursor, append });
       setState(prev => ({ ...prev, loading: true, error: null }));
       
       const response = await api.documents.listDocuments({
         limit: 20,
         cursor
       });
-      console.log('✅ useDocuments: Documents fetched successfully', { count: response.documents ? response.documents.length : 0 });
+      console.log('✅ useDocuments: All documents fetched successfully', { count: response.documents ? response.documents.length : 0 });
 
       setState(prev => ({
         ...prev,
@@ -44,7 +73,7 @@ export function useDocuments() {
       }));
 
     } catch (error) {
-      console.error('❌ useDocuments: Failed to fetch documents:', error);
+      console.error('❌ useDocuments: Failed to fetch all documents:', error);
       setState(prev => ({
         ...prev,
         error: error instanceof Error ? error.message : 'Failed to load documents',
@@ -56,9 +85,9 @@ export function useDocuments() {
   // Load more documents
   const loadMore = useCallback(() => {
     if (state.hasMore && state.nextCursor && !state.loading) {
-      fetchDocuments(state.nextCursor, true);
+      fetchAllDocuments(state.nextCursor, true);
     }
-  }, [state.hasMore, state.nextCursor, state.loading, fetchDocuments]);
+  }, [state.hasMore, state.nextCursor, state.loading, fetchAllDocuments]);
 
   // Upload document
   const uploadDocument = useCallback(async (file: File, metadata: DocumentUploadRequest): Promise<DocumentUploadResponse | null> => {
@@ -67,8 +96,8 @@ export function useDocuments() {
 
       const response = await api.documents.uploadDocument(file, metadata);
 
-      // Refresh documents list after successful upload
-      await fetchDocuments();
+      // Refresh recent documents list after successful upload
+      await fetchRecentDocuments();
 
       setState(prev => ({ ...prev, uploading: false }));
       return response;
@@ -82,17 +111,18 @@ export function useDocuments() {
       }));
       return null;
     }
-  }, [fetchDocuments]);
+  }, [fetchRecentDocuments]);
 
   // Delete document
   const deleteDocument = useCallback(async (documentId: string): Promise<boolean> => {
     try {
       await api.documents.deleteDocument(documentId);
       
-      // Remove from local state
+      // Remove from both local states
       setState(prev => ({
         ...prev,
-        documents: prev.documents.filter(doc => doc.id !== documentId)
+        documents: prev.documents.filter(doc => doc.document_id !== documentId),
+        recentDocuments: prev.recentDocuments.filter(doc => doc.document_id !== documentId)
       }));
 
       return true;
@@ -111,12 +141,17 @@ export function useDocuments() {
     try {
       await api.documents.processDocument(documentId);
       
-      // Update document status in local state
+      // Update document status in both local states
       setState(prev => ({
         ...prev,
         documents: prev.documents.map(doc => 
-          doc.id === documentId 
-            ? { ...doc, processing_status: 'processing' }
+          doc.document_id === documentId 
+            ? { ...doc, status: 'processing' }
+            : doc
+        ),
+        recentDocuments: prev.recentDocuments.map(doc => 
+          doc.document_id === documentId 
+            ? { ...doc, status: 'processing' }
             : doc
         )
       }));
@@ -147,13 +182,29 @@ export function useDocuments() {
     }
   }, []);
 
+  // Get document view URL
+  const getDocumentViewURL = useCallback(async (documentId: string) => {
+    try {
+      const response = await api.documents.getDocumentViewURL(documentId);
+      return response;
+    } catch (error) {
+      console.error('Failed to get document view URL:', error);
+      setState(prev => ({
+        ...prev,
+        error: error instanceof Error ? error.message : 'Failed to get document view URL'
+      }));
+      return null;
+    }
+  }, []);
+
   // Initial fetch
   useEffect(() => {
-    fetchDocuments();
-  }, []);
+    fetchRecentDocuments();
+  }, [fetchRecentDocuments]);
 
   return {
     documents: state.documents,
+    recentDocuments: state.recentDocuments,
     loading: state.loading,
     uploading: state.uploading,
     error: state.error,
@@ -162,7 +213,9 @@ export function useDocuments() {
     deleteDocument,
     processDocument,
     searchDocuments,
+    getDocumentViewURL,
     loadMore,
-    refresh: () => fetchDocuments()
+    fetchAllDocuments,
+    refresh: () => fetchRecentDocuments()
   };
 } 

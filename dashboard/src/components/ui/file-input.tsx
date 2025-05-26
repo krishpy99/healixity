@@ -1,15 +1,23 @@
 import React, { useState } from "react";
 import { Input } from "./input";
 import { Button } from "./button";
-import { UploadIcon, XIcon } from "lucide-react";
+import { XIcon } from "lucide-react";
 
 interface FileInputProps {
   onFileChange: (file: File | null) => void;
   accept?: string;
   maxSize?: number; // in MB
+  showAcceptedTypes?: boolean;
+  acceptedTypesLabel?: string;
 }
 
-export function FileInput({ onFileChange, accept = "*/*", maxSize = 5 }: FileInputProps) {
+export function FileInput({ 
+  onFileChange, 
+  accept = "*/*", 
+  maxSize = 5, 
+  showAcceptedTypes = false,
+  acceptedTypesLabel = ""
+}: FileInputProps) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
   
@@ -44,53 +52,48 @@ export function FileInput({ onFileChange, accept = "*/*", maxSize = 5 }: FileInp
   
   // Format filename to shorten if too long
   const formatFileName = (name: string): string => {
-    if (name.length <= 25) return name;
+    if (name.length <= 30) return name;
     
     const extension = name.split('.').pop() || '';
     const nameWithoutExt = name.substring(0, name.lastIndexOf('.'));
     
-    if (nameWithoutExt.length <= 20) return name;
+    if (nameWithoutExt.length <= 25) return name;
     
-    return `${nameWithoutExt.substring(0, 10)}...${nameWithoutExt.substring(nameWithoutExt.length - 7)}.${extension}`;
+    return `${nameWithoutExt.substring(0, 12)}...${nameWithoutExt.substring(nameWithoutExt.length - 8)}.${extension}`;
   };
   
   return (
     <div className="space-y-2">
-      <div className="flex items-center gap-2">
-        <div className="relative flex-1 min-w-0">
-          <Input
-            type="file"
-            accept={accept}
-            onChange={handleFileChange}
-            className="absolute inset-0 opacity-0 cursor-pointer z-10"
-          />
-          <div className="border border-input bg-background rounded-md px-3 py-2 text-sm flex items-center overflow-hidden">
-            <span className="truncate flex-1 mr-2" title={selectedFile?.name}>
-              {selectedFile ? formatFileName(selectedFile.name) : "Choose file..."}
-            </span>
-            {selectedFile && (
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="flex-shrink-0 h-7 w-7"
-                onClick={clearFile}
-              >
-                <XIcon className="h-4 w-4" />
-              </Button>
-            )}
-          </div>
+      <div className="relative">
+        <Input
+          type="file"
+          accept={accept}
+          onChange={handleFileChange}
+          className="absolute inset-0 opacity-0 cursor-pointer z-10"
+        />
+        <div className="border border-input bg-background rounded-md px-3 py-2 text-sm flex items-center overflow-hidden hover:bg-muted/50 transition-colors cursor-pointer">
+          <span className="truncate flex-1 mr-2" title={selectedFile?.name}>
+            {selectedFile ? formatFileName(selectedFile.name) : "Choose file..."}
+          </span>
+          {selectedFile && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="flex-shrink-0 h-7 w-7"
+              onClick={(e) => {
+                e.stopPropagation();
+                clearFile();
+              }}
+            >
+              <XIcon className="h-4 w-4" />
+            </Button>
+          )}
         </div>
-        <Button
-          type="button"
-          variant="outline"
-          className="flex-shrink-0 whitespace-nowrap"
-          onClick={() => document.querySelector<HTMLInputElement>('input[type="file"]')?.click()}
-        >
-          <UploadIcon className="h-4 w-4 mr-2" />
-          Upload
-        </Button>
       </div>
+      {showAcceptedTypes && acceptedTypesLabel && (
+        <p className="text-xs text-muted-foreground">{acceptedTypesLabel}</p>
+      )}
       {error && <p className="text-sm text-destructive">{error}</p>}
     </div>
   );

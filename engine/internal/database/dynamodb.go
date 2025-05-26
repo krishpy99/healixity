@@ -178,6 +178,12 @@ func (d *DynamoDBClient) PutDocument(document *models.Document) error {
 		return fmt.Errorf("failed to marshal document: %w", err)
 	}
 
+	// For backward compatibility, also set document_id as sort key if sort_key is not supported
+	// This allows the code to work with both old and new table schemas
+	if documentIDAttr, exists := item["document_id"]; exists {
+		item["document_id"] = documentIDAttr
+	}
+
 	input := &dynamodb.PutItemInput{
 		TableName: aws.String(d.documentsTableName),
 		Item:      item,
@@ -193,33 +199,45 @@ func (d *DynamoDBClient) PutDocument(document *models.Document) error {
 
 // GetDocument retrieves a specific document by ID
 func (d *DynamoDBClient) GetDocument(userID, documentID string) (*models.Document, error) {
-	input := &dynamodb.GetItemInput{
-		TableName: aws.String(d.documentsTableName),
-		Key: map[string]*dynamodb.AttributeValue{
-			"user_id": {
+	// Query all documents for the user and find the matching document_id
+	queryInput := &dynamodb.QueryInput{
+		TableName:              aws.String(d.documentsTableName),
+		KeyConditionExpression: aws.String("user_id = :userID"),
+		ExpressionAttributeValues: map[string]*dynamodb.AttributeValue{
+			":userID": {
 				S: aws.String(userID),
-			},
-			"document_id": {
-				S: aws.String(documentID),
 			},
 		},
 	}
 
-	result, err := d.client.GetItem(input)
+	fmt.Printf("DEBUG: GetDocument - userID=%s, documentID=%s, table=%s\n", userID, documentID, d.documentsTableName)
+
+	queryResult, err := d.client.Query(queryInput)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get document: %w", err)
+		fmt.Printf("DEBUG: Query error: %v\n", err)
+		return nil, fmt.Errorf("failed to query document: %w", err)
 	}
 
-	if result.Item == nil {
-		return nil, fmt.Errorf("document not found")
+	fmt.Printf("DEBUG: Query returned %d items\n", len(queryResult.Items))
+
+	// Find the document with matching document_id
+	for i, item := range queryResult.Items {
+		var document models.Document
+		if err := document.FromDynamoDBItem(item); err != nil {
+			fmt.Printf("DEBUG: Unmarshal error for item %d: %v\n", i, err)
+			continue // Skip invalid items
+		}
+
+		fmt.Printf("DEBUG: Item %d - DocumentID='%s', target='%s', match=%v\n", i, document.DocumentID, documentID, document.DocumentID == documentID)
+
+		if document.DocumentID == documentID {
+			fmt.Printf("DEBUG: Found matching document!\n")
+			return &document, nil
+		}
 	}
 
-	var document models.Document
-	if err := document.FromDynamoDBItem(result.Item); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal document: %w", err)
-	}
-
-	return &document, nil
+	fmt.Printf("DEBUG: No matching document found\n")
+	return nil, fmt.Errorf("document not found")
 }
 
 // GetUserDocuments retrieves all documents for a user
@@ -287,14 +305,23 @@ func (d *DynamoDBClient) UpdateDocument(document *models.Document) error {
 		}
 	}
 
+	// Determine the correct sort key
+	sortKey := document.SortKey
+	sortKeyName := "sort_key"
+	if sortKey == "" {
+		// Fallback to document_id for old schema
+		sortKey = document.DocumentID
+		sortKeyName = "document_id"
+	}
+
 	input := &dynamodb.UpdateItemInput{
 		TableName: aws.String(d.documentsTableName),
 		Key: map[string]*dynamodb.AttributeValue{
 			"user_id": {
 				S: aws.String(document.UserID),
 			},
-			"document_id": {
-				S: aws.String(document.DocumentID),
+			sortKeyName: {
+				S: aws.String(sortKey),
 			},
 		},
 		UpdateExpression:          aws.String(updateExpression),
@@ -312,19 +339,50 @@ func (d *DynamoDBClient) UpdateDocument(document *models.Document) error {
 
 // DeleteDocument removes a document from DynamoDB
 func (d *DynamoDBClient) DeleteDocument(userID, documentID string) error {
+	// Query to find the document and get its sort key
+	queryInput := &dynamodb.QueryInput{
+		TableName:              aws.String(d.documentsTableName),
+		KeyConditionExpression: aws.String("user_id = :userID"),
+		FilterExpression:       aws.String("document_id = :documentID"),
+		ExpressionAttributeValues: map[string]*dynamodb.AttributeValue{
+			":userID": {
+				S: aws.String(userID),
+			},
+			":documentID": {
+				S: aws.String(documentID),
+			},
+		},
+	}
+
+	queryResult, err := d.client.Query(queryInput)
+	if err != nil {
+		return fmt.Errorf("failed to query document for deletion: %w", err)
+	}
+
+	if len(queryResult.Items) == 0 {
+		return fmt.Errorf("document not found")
+	}
+
+	// Get the sort_key from the first (and should be only) result
+	sortKeyAttr, exists := queryResult.Items[0]["sort_key"]
+	if !exists || sortKeyAttr.S == nil {
+		return fmt.Errorf("document sort_key not found")
+	}
+
+	// Delete using the correct keys
 	input := &dynamodb.DeleteItemInput{
 		TableName: aws.String(d.documentsTableName),
 		Key: map[string]*dynamodb.AttributeValue{
 			"user_id": {
 				S: aws.String(userID),
 			},
-			"document_id": {
-				S: aws.String(documentID),
+			"sort_key": {
+				S: sortKeyAttr.S,
 			},
 		},
 	}
 
-	_, err := d.client.DeleteItem(input)
+	_, err = d.client.DeleteItem(input)
 	if err != nil {
 		return fmt.Errorf("failed to delete document: %w", err)
 	}
