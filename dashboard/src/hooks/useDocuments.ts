@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import { api } from '@/lib/api';
-import { Document, DocumentUploadRequest, DocumentUploadResponse } from './types';
+import type { Document as ApiDocument } from '@/lib/api';
+import { DocumentUploadRequest, DocumentUploadResponse } from './types';
 
 interface DocumentsState {
-  documents: Document[];
-  recentDocuments: Document[];
+  documents: ApiDocument[];
+  recentDocuments: ApiDocument[];
   loading: boolean;
   uploading: boolean;
   error: string | null;
@@ -199,7 +200,7 @@ export function useDocuments() {
   }, []);
 
   // Search documents
-  const searchDocuments = useCallback(async (query: string): Promise<Document[]> => {
+  const searchDocuments = useCallback(async (query: string): Promise<ApiDocument[]> => {
     try {
       const response = await api.documents.searchDocuments({ query, limit: 50 });
       return response.documents;

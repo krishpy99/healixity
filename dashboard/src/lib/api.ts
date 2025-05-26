@@ -306,12 +306,15 @@ export interface Document {
   s3_url?: string;
   upload_time: string;
   processed_at?: string;
-  status: string;
+  status: 'uploaded' | 'processing' | 'processed' | 'failed';
   chunk_count: number;
   tags?: string[];
   category: string;
   description?: string;
   error_message?: string;
+  processing_attempts: number;
+  last_processing_attempt?: string;
+  indexed_in_pinecone: boolean;
 }
 
 export interface DocumentUploadRequest {

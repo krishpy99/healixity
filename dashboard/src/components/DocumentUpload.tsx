@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Loader2, CheckCircle, FileText, Trash2, Eye, MoreHorizontal, Settings } from "lucide-react";
 import { useDocuments } from "@/hooks";
 import { DocumentUploadRequest } from "@/hooks/types";
+import type { Document } from "@/lib/api";
 import { config } from "@/lib/config";
 import DocumentViewer from "./DocumentViewer";
 
@@ -107,7 +108,7 @@ const DocumentUpload: React.FC = () => {
         month: "short",
         day: "numeric",
       });
-    } catch (error) {
+    } catch {
       console.warn('Failed to format date:', dateString);
       return "Invalid date";
     }
@@ -137,7 +138,7 @@ const DocumentUpload: React.FC = () => {
   };
 
   // Document row component
-  const DocumentRow = ({ doc, showActions = true }: { doc: any, showActions?: boolean }) => (
+  const DocumentRow = ({ doc, showActions = true }: { doc: Document, showActions?: boolean }) => (
     <div className="flex items-center p-3 border rounded-md bg-muted/30 hover:bg-muted/50 transition-colors">
       <FileText className={`h-8 w-8 mr-3 flex-shrink-0 ${getFileTypeColor(doc?.content_type)}`} />
       <div className="flex-1 min-w-0">

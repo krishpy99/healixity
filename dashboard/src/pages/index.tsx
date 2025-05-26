@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import Head from "next/head";
 import MetricCard from "@/components/MetricCard";
 import ChatBox from "@/components/ChatBox";
 import DocumentUpload from "@/components/DocumentUpload";
@@ -24,7 +25,7 @@ import {
 } from "lucide-react";
 import { useDashboardData, useMetrics } from "@/hooks";
 import { useMetricSettings } from "@/hooks/useMetricSettings";
-import { getMetricUnit, METRIC_TYPES, getMetricDisplayName } from "@/hooks/types";
+import { getMetricUnit, METRIC_TYPES } from "@/hooks/types";
 
 // Define metric configuration with icons and display info
 const METRIC_CONFIG: Record<string, {
@@ -163,10 +164,17 @@ export default function Dashboard() {
   const visibleMetrics = getVisibleMetrics();
 
   return (
-    <div className="min-h-screen bg-background p-4 md:p-6">
+    <>
+      <Head>
+        <title>Healixity - Personal Health Dashboard</title>
+        <meta name="description" content="Your comprehensive health monitoring and management platform" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <link rel="icon" href="/favicon.ico" />
+      </Head>
+      <div className="min-h-screen bg-background p-4 md:p-6">
       <div className="mx-auto max-w-7xl space-y-6">
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-semibold text-foreground">Health Dashboard</h1>
+          <h1 className="text-2xl font-semibold text-foreground">Healixity</h1>
           <div className="flex items-center gap-2">
             <ThemeToggle />
             <Button 
@@ -262,6 +270,7 @@ export default function Dashboard() {
         selectedMetrics={selectedMetrics}
         onSaveSettings={saveSettings}
       />
-    </div>
+      </div>
+    </>
   );
 }

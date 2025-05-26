@@ -21,7 +21,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
     try {
       const date = new Date(timestamp);
       return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    } catch (error) {
+    } catch {
       return timestamp;
     }
   };
