@@ -16,6 +16,11 @@ type Config struct {
 	JWTSecret   string
 	TestMode    bool // Add test mode flag
 
+	// TLS configuration
+	TLSEnabled  bool   // Enable TLS/HTTPS
+	TLSCertFile string // Path to TLS certificate file
+	TLSKeyFile  string // Path to TLS private key file
+
 	// Logging configuration
 	LogMode string // PRINT, WRITE, or NONE
 
@@ -69,6 +74,11 @@ func Load() (*Config, error) {
 		Environment: getEnv("ENVIRONMENT", "development"),
 		JWTSecret:   getEnv("JWT_SECRET", "your-secret-key"),
 		TestMode:    getEnvAsBool("TEST_MODE", false), // Add test mode configuration
+
+		// TLS configuration
+		TLSEnabled:  getEnvAsBool("TLS_ENABLED", false),
+		TLSCertFile: getEnv("TLS_CERT_FILE", ""),
+		TLSKeyFile:  getEnv("TLS_KEY_FILE", ""),
 
 		// Logging configuration
 		LogMode: getEnv("LOG_MODE", "PRINT"),

@@ -207,7 +207,26 @@ func main() {
 				zap.String("port", cfg.Port),
 				zap.String("environment", cfg.Environment))
 		}
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+
+		var err error
+		if cfg.TLSEnabled {
+			if cfg.TLSCertFile == "" || cfg.TLSKeyFile == "" {
+				zapLogger.Fatal("TLS enabled but certificate or key file not specified",
+					zap.String("cert_file", cfg.TLSCertFile),
+					zap.String("key_file", cfg.TLSKeyFile))
+			}
+			zapLogger.Info("Starting HTTPS server with TLS",
+				zap.String("port", cfg.Port),
+				zap.String("cert_file", cfg.TLSCertFile),
+				zap.String("key_file", cfg.TLSKeyFile))
+			err = srv.ListenAndServeTLS(cfg.TLSCertFile, cfg.TLSKeyFile)
+		} else {
+			zapLogger.Info("Starting HTTP server",
+				zap.String("port", cfg.Port))
+			err = srv.ListenAndServe()
+		}
+
+		if err != nil && err != http.ErrServerClosed {
 			zapLogger.Fatal("Failed to start server", zap.Error(err))
 		}
 	}()

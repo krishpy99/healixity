@@ -93,6 +93,11 @@ ENVIRONMENT=development
 # Test Mode (for development/testing only)
 TEST_MODE=false
 
+# TLS/HTTPS Configuration
+TLS_ENABLED=false
+TLS_CERT_FILE=./certs/server.crt
+TLS_KEY_FILE=./certs/server.key
+
 # JWT Configuration
 JWT_SECRET=your_super_secret_jwt_key_here
 
@@ -158,6 +163,30 @@ CHUNK_OVERLAP=200
    go build -o health-dashboard-backend ./cmd/server
    ./health-dashboard-backend
    ```
+
+### TLS/HTTPS Setup
+
+To enable HTTPS with TLS certificates, see the [TLS Setup Guide](docs/tls-setup.md) for detailed instructions on:
+
+- Generating self-signed certificates for development
+- Setting up Let's Encrypt certificates for production
+- Configuring the server for HTTPS
+- Frontend configuration for HTTPS endpoints
+
+**Quick Start for Development:**
+```bash
+# Generate development certificates
+./scripts/generate-dev-certs.sh
+
+# Set environment variables
+export TLS_ENABLED=true
+export TLS_CERT_FILE=./certs/server.crt
+export TLS_KEY_FILE=./certs/server.key
+export PORT=8443
+
+# Run the server with HTTPS
+./health-dashboard-backend
+```
 
 ## API Endpoints
 
