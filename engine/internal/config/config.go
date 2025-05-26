@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/joho/godotenv"
 )
@@ -17,6 +18,10 @@ type Config struct {
 
 	// Logging configuration
 	LogMode string // PRINT, WRITE, or NONE
+
+	// CORS configuration
+	CORSAllowedOrigins  []string
+	CORSAllowAllOrigins bool
 
 	// Clerk configuration
 	ClerkSecretKey      string
@@ -67,6 +72,10 @@ func Load() (*Config, error) {
 
 		// Logging configuration
 		LogMode: getEnv("LOG_MODE", "PRINT"),
+
+		// CORS configuration
+		CORSAllowedOrigins:  getEnvAsStringSlice("CORS_ALLOWED_ORIGINS", []string{"http://localhost:3000", "http://localhost:3001", "https://localhost:3000", "https://localhost:3001"}),
+		CORSAllowAllOrigins: getEnvAsBool("CORS_ALLOW_ALL_ORIGINS", false),
 
 		// Clerk configuration
 		ClerkSecretKey:      getEnv("CLERK_SECRET_KEY", ""),
@@ -150,6 +159,20 @@ func getEnvAsBool(key string, fallback bool) bool {
 		if boolVal, err := strconv.ParseBool(value); err == nil {
 			return boolVal
 		}
+	}
+	return fallback
+}
+
+// getEnvAsStringSlice gets environment variable as string slice with fallback
+func getEnvAsStringSlice(key string, fallback []string) []string {
+	if value := os.Getenv(key); value != "" {
+		// Split by comma and trim whitespace
+		parts := strings.Split(value, ",")
+		result := make([]string, len(parts))
+		for i, part := range parts {
+			result[i] = strings.TrimSpace(part)
+		}
+		return result
 	}
 	return fallback
 }

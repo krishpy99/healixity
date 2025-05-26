@@ -103,7 +103,15 @@ func main() {
 
 	router := gin.New()
 	router.Use(middleware.RequestLogger(zapLogger))
-	router.Use(middleware.CORS())
+	router.Use(middleware.CORSWithConfig(middleware.CORSConfig{
+		AllowAllOrigins:  cfg.CORSAllowAllOrigins,
+		AllowedOrigins:   cfg.CORSAllowedOrigins,
+		AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+		AllowedHeaders:   []string{"Content-Type", "Content-Length", "Accept-Encoding", "X-CSRF-Token", "Authorization", "accept", "origin", "Cache-Control", "X-Requested-With"},
+		ExposedHeaders:   []string{"Content-Length", "Access-Control-Allow-Origin", "Access-Control-Allow-Headers", "Content-Type"},
+		AllowCredentials: true,
+		MaxAge:           "86400", // 24 hours
+	}))
 	router.Use(gin.Recovery())
 
 	// Health check endpoint
