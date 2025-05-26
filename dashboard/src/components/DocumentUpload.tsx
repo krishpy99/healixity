@@ -22,7 +22,7 @@ const DocumentUpload: React.FC = () => {
     hasMore,
     uploadDocument,
     deleteDocument,
-    processDocument,
+    retryProcessDocument,
     getDocumentViewURL,
     fetchAllDocuments,
     loadMore
@@ -70,8 +70,8 @@ const DocumentUpload: React.FC = () => {
     }
   };
 
-  const handleProcess = async (documentId: string) => {
-    await processDocument(documentId);
+  const handleRetry = async (documentId: string) => {
+    await retryProcessDocument(documentId);
   };
 
   const handleView = (documentId: string) => {
@@ -130,7 +130,10 @@ const DocumentUpload: React.FC = () => {
     if (status === 'processing') {
       return <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded">Processing...</span>;
     }
-    return <span className="text-xs bg-gray-100 text-gray-800 px-2 py-1 rounded">Pending</span>;
+    if (status === 'failed') {
+      return <span className="text-xs bg-red-100 text-red-800 px-2 py-1 rounded">Failed</span>;
+    }
+    return <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">Uploaded</span>;
   };
 
   // Document row component
@@ -153,38 +156,33 @@ const DocumentUpload: React.FC = () => {
         </div>
       </div>
       {showActions && (
-        <div className="flex gap-1 flex-shrink-0">
-          {doc?.document_id && (
+        <div className="flex items-center gap-1">
+          <Button 
+            variant="ghost" 
+            size="sm"
+            onClick={() => handleView(doc.document_id)}
+            title="View document"
+          >
+            <Eye className="h-3 w-3" />
+          </Button>
+          {doc?.status === 'failed' && (
             <Button 
               variant="ghost" 
               size="sm"
-              onClick={() => handleView(doc.document_id)}
-              title="View document"
-            >
-              <Eye className="h-3 w-3" />
-            </Button>
-          )}
-          {doc?.status !== 'processed' && doc?.document_id && (
-            <Button 
-              variant="ghost" 
-              size="sm"
-              onClick={() => handleProcess(doc.document_id)}
-              title="Process document"
+              onClick={() => handleRetry(doc.document_id)}
+              title="Retry processing"
             >
               <Settings className="h-3 w-3" />
             </Button>
           )}
-          {doc?.document_id && (
-            <Button 
-              variant="ghost" 
-              size="sm"
-              onClick={() => handleDelete(doc.document_id)}
-              title="Delete document"
-              className="text-red-600 hover:text-red-700"
-            >
-              <Trash2 className="h-3 w-3" />
-            </Button>
-          )}
+          <Button 
+            variant="ghost" 
+            size="sm"
+            onClick={() => handleDelete(doc.document_id)}
+            title="Delete document"
+          >
+            <Trash2 className="h-3 w-3" />
+          </Button>
         </div>
       )}
     </div>
@@ -199,7 +197,7 @@ const DocumentUpload: React.FC = () => {
       <CardHeader>
         <CardTitle>Document Upload</CardTitle>
         <CardDescription>
-          Upload medical documents for AI analysis and record keeping
+          Upload medical documents for AI analysis and record keeping. Documents are automatically processed and indexed for search.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -292,7 +290,7 @@ const DocumentUpload: React.FC = () => {
         {uploadSuccess && (
           <Alert className="bg-green-50 border-green-200 text-green-800">
             <CheckCircle className="h-4 w-4 text-green-600" />
-            <AlertDescription>Document uploaded successfully!</AlertDescription>
+            <AlertDescription>Document uploaded successfully! Processing will begin automatically.</AlertDescription>
           </Alert>
         )}
 

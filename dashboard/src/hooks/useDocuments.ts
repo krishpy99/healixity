@@ -167,6 +167,37 @@ export function useDocuments() {
     }
   }, []);
 
+  // Retry document processing
+  const retryProcessDocument = useCallback(async (documentId: string): Promise<boolean> => {
+    try {
+      await api.documents.retryProcessDocument(documentId);
+      
+      // Update document status in both local states
+      setState(prev => ({
+        ...prev,
+        documents: prev.documents.map(doc => 
+          doc.document_id === documentId 
+            ? { ...doc, status: 'processing', error_message: '' }
+            : doc
+        ),
+        recentDocuments: prev.recentDocuments.map(doc => 
+          doc.document_id === documentId 
+            ? { ...doc, status: 'processing', error_message: '' }
+            : doc
+        )
+      }));
+
+      return true;
+    } catch (error) {
+      console.error('Failed to retry document processing:', error);
+      setState(prev => ({
+        ...prev,
+        error: error instanceof Error ? error.message : 'Failed to retry document processing'
+      }));
+      return false;
+    }
+  }, []);
+
   // Search documents
   const searchDocuments = useCallback(async (query: string): Promise<Document[]> => {
     try {
@@ -212,6 +243,7 @@ export function useDocuments() {
     uploadDocument,
     deleteDocument,
     processDocument,
+    retryProcessDocument,
     searchDocuments,
     getDocumentViewURL,
     loadMore,

@@ -6,6 +6,7 @@ import (
 
 	"health-dashboard-backend/internal/config"
 	"health-dashboard-backend/internal/database"
+	"health-dashboard-backend/internal/logger"
 	"health-dashboard-backend/internal/models"
 )
 
@@ -48,11 +49,11 @@ func (h *HealthService) AddHealthData(userID string, input *models.HealthMetricI
 			input.Type, metricInfo.Unit, input.Unit)
 	}
 
-	fmt.Println("metricInfo", metricInfo)
+	logger.DebugPrint("metricInfo", metricInfo)
 
 	// Store in database
 	if err := h.db.PutHealthMetric(metric); err != nil {
-		fmt.Println("err", err)
+		logger.DebugPrint("err", err)
 		return nil, fmt.Errorf("failed to store health metric: %w", err)
 	}
 
@@ -144,7 +145,7 @@ func (h *HealthService) AddBloodGlucoseData(userID string, input *models.BloodGl
 	// This is a soft validation - we'll just log a warning if it seems unusual
 	if input.Postprandial < input.Fasting {
 		// This could be normal in some cases, so we won't fail but could log
-		fmt.Println("Postprandial glucose is lower than fasting glucose")
+		logger.DebugPrint("Postprandial glucose is lower than fasting glucose")
 	}
 
 	timestamp := time.Now()

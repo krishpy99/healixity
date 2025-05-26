@@ -219,6 +219,86 @@ func (d *DocumentHandler) ProcessDocument(c *gin.Context) {
 	})
 }
 
+// RetryProcessDocument handles POST /api/documents/:id/retry
+func (d *DocumentHandler) RetryProcessDocument(c *gin.Context) {
+	userID := middleware.GetUserID(c)
+	if userID == "" {
+		utils.ErrorResponse(c, http.StatusUnauthorized, "User not authenticated")
+		return
+	}
+
+	documentID := c.Param("id")
+	if documentID == "" {
+		utils.ErrorResponse(c, http.StatusBadRequest, "Document ID is required")
+		return
+	}
+
+	// Retry processing document
+	if err := d.documentService.RetryProcessDocument(userID, documentID); err != nil {
+		d.logger.Error("Failed to retry document processing",
+			zap.String("user_id", userID),
+			zap.String("document_id", documentID),
+			zap.Error(err))
+		utils.ErrorResponse(c, http.StatusInternalServerError, "Failed to retry document processing")
+		return
+	}
+
+	d.logger.Info("Document processing retry started",
+		zap.String("user_id", userID),
+		zap.String("document_id", documentID))
+
+	utils.SuccessResponse(c, http.StatusAccepted, "Document processing retry started", gin.H{
+		"document_id": documentID,
+		"status":      "processing",
+	})
+}
+
+// QueryDocuments handles POST /api/documents/query
+func (d *DocumentHandler) QueryDocuments(c *gin.Context) {
+	userID := middleware.GetUserID(c)
+	if userID == "" {
+		utils.ErrorResponse(c, http.StatusUnauthorized, "User not authenticated")
+		return
+	}
+
+	var request struct {
+		Query string `json:"query" binding:"required"`
+		Limit int    `json:"limit,omitempty"`
+	}
+
+	if err := c.ShouldBindJSON(&request); err != nil {
+		utils.ErrorResponse(c, http.StatusBadRequest, "Invalid request format")
+		return
+	}
+
+	// Set default limit
+	if request.Limit <= 0 || request.Limit > 50 {
+		request.Limit = 10
+	}
+
+	// Query documents using RAG service
+	contexts, err := d.ragService.QueryRelevantContext(c.Request.Context(), userID, request.Query, request.Limit)
+	if err != nil {
+		d.logger.Error("Failed to query documents",
+			zap.String("user_id", userID),
+			zap.String("query", request.Query),
+			zap.Error(err))
+		utils.ErrorResponse(c, http.StatusInternalServerError, "Failed to query documents")
+		return
+	}
+
+	d.logger.Info("Documents queried successfully",
+		zap.String("user_id", userID),
+		zap.String("query", request.Query),
+		zap.Int("results_count", len(contexts)))
+
+	utils.SuccessResponse(c, http.StatusOK, "Documents queried successfully", gin.H{
+		"query":   request.Query,
+		"results": contexts,
+		"count":   len(contexts),
+	})
+}
+
 // SearchDocuments handles GET /api/documents/search
 func (d *DocumentHandler) SearchDocuments(c *gin.Context) {
 	userID := middleware.GetUserID(c)

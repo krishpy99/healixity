@@ -14,22 +14,39 @@ import (
 	"health-dashboard-backend/internal/config"
 	"health-dashboard-backend/internal/database"
 	"health-dashboard-backend/internal/handlers"
+	"health-dashboard-backend/internal/logger"
 	"health-dashboard-backend/internal/middleware"
 	"health-dashboard-backend/internal/services"
 	"health-dashboard-backend/internal/storage"
 	"health-dashboard-backend/internal/vectordb"
-	"health-dashboard-backend/pkg/ai"
 )
 
 func main() {
-	// Initialize logger
-	logger, _ := zap.NewProduction()
-	defer logger.Sync()
-
-	// Load configuration
+	// Load configuration first
 	cfg, err := config.Load()
 	if err != nil {
-		logger.Fatal("Failed to load configuration", zap.Error(err))
+		// Use basic fmt.Printf for config loading errors since logger isn't ready yet
+		panic("Failed to load configuration: " + err.Error())
+	}
+
+	// Initialize configurable logger based on LOG_MODE
+	customLogger, err := logger.NewLogger(logger.LogMode(cfg.LogMode))
+	if err != nil {
+		panic("Failed to initialize logger: " + err.Error())
+	}
+	defer customLogger.Close()
+
+	// Get the underlying zap logger for compatibility with existing code
+	zapLogger := customLogger.GetZapLogger()
+
+	// Log the current logging mode for visibility
+	switch logger.LogMode(cfg.LogMode) {
+	case logger.ModePrint:
+		customLogger.Print("🖨️  Logger initialized in PRINT mode - logs will be displayed in console")
+	case logger.ModeWrite:
+		customLogger.Print("📝 Logger initialized in WRITE mode - logs will be written to logs.json")
+	case logger.ModeNone:
+		customLogger.Print("🚫 Logger initialized in NONE mode - logging is disabled")
 	}
 
 	// Initialize Clerk
@@ -38,39 +55,46 @@ func main() {
 	// Initialize AWS services
 	dynamoClient, err := database.NewDynamoDBClient(cfg)
 	if err != nil {
-		logger.Fatal("Failed to initialize DynamoDB client", zap.Error(err))
+		zapLogger.Fatal("Failed to initialize DynamoDB client", zap.Error(err))
 	}
 
 	s3Client, err := storage.NewS3Client(cfg)
 	if err != nil {
-		logger.Fatal("Failed to initialize S3 client", zap.Error(err))
+		zapLogger.Fatal("Failed to initialize S3 client", zap.Error(err))
 	}
 
 	// Initialize Pinecone
 	pineconeClient, err := vectordb.NewPineconeClient(cfg)
 	if err != nil {
-		logger.Fatal("Failed to initialize Pinecone client", zap.Error(err))
+		zapLogger.Fatal("Failed to initialize Pinecone client", zap.Error(err))
 	}
 
-	// Initialize AI client
-	llmClient, err := ai.NewLLMClient(cfg)
+	// Initialize AI clients using factory
+	aiFactory := services.NewAIClientFactory(cfg)
+
+	llmClient, err := aiFactory.CreateLLMClient()
 	if err != nil {
-		logger.Fatal("Failed to initialize LLM client", zap.Error(err))
+		zapLogger.Fatal("Failed to initialize LLM client", zap.Error(err))
+	}
+
+	embeddingClient, err := aiFactory.CreateEmbeddingClient()
+	if err != nil {
+		zapLogger.Fatal("Failed to initialize embedding client", zap.Error(err))
 	}
 
 	// Initialize services
 	healthService := services.NewHealthService(dynamoClient, cfg)
-	documentService := services.NewDocumentService(s3Client, dynamoClient, cfg)
-	ragService := services.NewRAGService(pineconeClient, llmClient, cfg)
+	ragService := services.NewRAGService(pineconeClient, llmClient, embeddingClient, cfg)
+	documentService := services.NewDocumentService(s3Client, dynamoClient, ragService, cfg)
 	aiAgent := services.NewAIAgent(healthService, ragService, llmClient, cfg)
-	authService := services.NewAuthService(logger)
+	authService := services.NewAuthService(zapLogger)
 
 	// Initialize handlers
-	healthHandler := handlers.NewHealthHandler(healthService, logger)
-	documentHandler := handlers.NewDocumentHandler(documentService, ragService, logger)
-	chatHandler := handlers.NewChatHandler(aiAgent, logger)
-	dashboardHandler := handlers.NewDashboardHandler(healthService, logger)
-	authHandler := handlers.NewAuthHandler(authService, logger)
+	healthHandler := handlers.NewHealthHandler(healthService, zapLogger)
+	documentHandler := handlers.NewDocumentHandler(documentService, ragService, zapLogger)
+	chatHandler := handlers.NewChatHandler(aiAgent, zapLogger)
+	dashboardHandler := handlers.NewDashboardHandler(healthService, zapLogger)
+	authHandler := handlers.NewAuthHandler(authService, zapLogger)
 
 	// Setup Gin router
 	if cfg.Environment == "production" {
@@ -78,7 +102,7 @@ func main() {
 	}
 
 	router := gin.New()
-	router.Use(middleware.RequestLogger(logger))
+	router.Use(middleware.RequestLogger(zapLogger))
 	router.Use(middleware.CORS())
 	router.Use(gin.Recovery())
 
@@ -125,6 +149,8 @@ func main() {
 			documentRoutes.GET("/:id", documentHandler.GetDocument)
 			documentRoutes.GET("/:id/view", documentHandler.GetDocumentViewURL)
 			documentRoutes.POST("/:id/process", documentHandler.ProcessDocument)
+			documentRoutes.POST("/:id/retry", documentHandler.RetryProcessDocument)
+			documentRoutes.POST("/query", documentHandler.QueryDocuments)
 			documentRoutes.DELETE("/:id", documentHandler.DeleteDocument)
 			documentRoutes.GET("/search", documentHandler.SearchDocuments)
 		}
@@ -165,16 +191,16 @@ func main() {
 	// Start server in goroutine
 	go func() {
 		if cfg.TestMode {
-			logger.Warn("Starting server in TEST MODE - authentication bypassed, userID set to 'test'",
+			zapLogger.Warn("Starting server in TEST MODE - authentication bypassed, userID set to 'test'",
 				zap.String("port", cfg.Port),
 				zap.String("environment", cfg.Environment))
 		} else {
-			logger.Info("Starting server with Clerk authentication",
+			zapLogger.Info("Starting server with Clerk authentication",
 				zap.String("port", cfg.Port),
 				zap.String("environment", cfg.Environment))
 		}
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			logger.Fatal("Failed to start server", zap.Error(err))
+			zapLogger.Fatal("Failed to start server", zap.Error(err))
 		}
 	}()
 
@@ -183,15 +209,15 @@ func main() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
-	logger.Info("Shutting down server...")
+	zapLogger.Info("Shutting down server...")
 
 	// Give outstanding requests 30 seconds to complete
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	if err := srv.Shutdown(ctx); err != nil {
-		logger.Fatal("Server forced to shutdown", zap.Error(err))
+		zapLogger.Fatal("Server forced to shutdown", zap.Error(err))
 	}
 
-	logger.Info("Server exited")
+	zapLogger.Info("Server exited")
 }

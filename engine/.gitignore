@@ -47,6 +47,7 @@ ehthumbs.db
 # Logs
 *.log
 logs/
+logs.json
 
 # Runtime data
 pids

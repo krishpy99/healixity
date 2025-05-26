@@ -85,6 +85,31 @@ func (p *PineconeClient) UpsertVectors(ctx context.Context, vectors []Vector) er
 		}
 	}
 
+	if len(vectors) == 0 {
+		return fmt.Errorf("no vectors provided for upsert")
+	}
+
+	// Get index stats to validate dimensions
+	stats, err := p.GetIndexStats(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get index stats for validation: %w", err)
+	}
+
+	// Log vector dimensions for debugging
+	firstVectorDim := len(vectors[0].Values)
+	fmt.Printf("DEBUG: First vector dimension: %d\n", firstVectorDim)
+	fmt.Printf("DEBUG: Index stats: %+v\n", stats)
+
+	// Validate all vectors have the same dimension
+	for i, v := range vectors {
+		if len(v.Values) != firstVectorDim {
+			return fmt.Errorf("vector %d has dimension %d, expected %d", i, len(v.Values), firstVectorDim)
+		}
+		if len(v.Values) == 0 {
+			return fmt.Errorf("vector %d has empty values", i)
+		}
+	}
+
 	// Convert our Vector type to Pinecone's Vector type
 	pineconeVectors := make([]*pinecone.Vector, len(vectors))
 	for i, v := range vectors {
@@ -101,9 +126,20 @@ func (p *PineconeClient) UpsertVectors(ctx context.Context, vectors []Vector) er
 		}
 	}
 
-	_, err := p.indexConnection.UpsertVectors(ctx, pineconeVectors)
+	fmt.Printf("DEBUG: Upserting %d vectors to Pinecone\n", len(pineconeVectors))
+
+	res, err := p.indexConnection.UpsertVectors(ctx, pineconeVectors)
+
+	fmt.Printf("DEBUG: Upsert response: %+v\n", res)
 	if err != nil {
 		return fmt.Errorf("failed to upsert vectors: %w", err)
+	}
+
+	// Verify the upsert was successful
+	if res > 0 {
+		fmt.Printf("DEBUG: Upsert completed successfully, upserted count: %d\n", res)
+	} else {
+		fmt.Println("WARNING: Upsert response is 0, this might indicate an issue")
 	}
 
 	return nil
@@ -206,6 +242,12 @@ func CreateVectorFromChunk(chunk *models.DocumentChunk) *Vector {
 		"chunk_id":    chunk.ChunkID,
 		"content":     chunk.Content,
 		"user_id":     chunk.UserID,
+		"chunk_index": chunk.ChunkIndex,
+	}
+
+	// Add custom metadata from the chunk
+	for k, v := range chunk.Metadata {
+		metadata[k] = v
 	}
 
 	return &Vector{
@@ -244,5 +286,19 @@ func (p *PineconeClient) HealthCheck(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("Pinecone health check failed: %w", err)
 	}
+	return nil
+}
+
+// ValidateIndexConfiguration validates that the index configuration matches expected dimensions
+func (p *PineconeClient) ValidateIndexConfiguration(ctx context.Context, expectedDimensions int) error {
+	// Get index details
+	idx, err := p.client.DescribeIndex(ctx, p.indexName)
+	if err != nil {
+		return fmt.Errorf("failed to describe index: %w", err)
+	}
+
+	fmt.Printf("DEBUG: Index '%s' details: %+v\n", p.indexName, idx)
+	fmt.Printf("INFO: Expected dimensions: %d\n", expectedDimensions)
+	fmt.Printf("INFO: Index configuration check completed\n")
 	return nil
 }

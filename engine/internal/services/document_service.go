@@ -1,10 +1,12 @@
 package services
 
 import (
+	"context"
 	"fmt"
 	"mime/multipart"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"health-dashboard-backend/internal/config"
 	"health-dashboard-backend/internal/database"
@@ -15,19 +17,21 @@ import (
 
 // DocumentService handles document operations
 type DocumentService struct {
-	s3Client  *storage.S3Client
-	db        *database.DynamoDBClient
-	processor *fileprocessor.FileProcessor
-	cfg       *config.Config
+	s3Client   *storage.S3Client
+	db         *database.DynamoDBClient
+	processor  *fileprocessor.FileProcessor
+	ragService *RAGService
+	cfg        *config.Config
 }
 
 // NewDocumentService creates a new document service
-func NewDocumentService(s3Client *storage.S3Client, db *database.DynamoDBClient, cfg *config.Config) *DocumentService {
+func NewDocumentService(s3Client *storage.S3Client, db *database.DynamoDBClient, ragService *RAGService, cfg *config.Config) *DocumentService {
 	return &DocumentService{
-		s3Client:  s3Client,
-		db:        db,
-		processor: fileprocessor.NewFileProcessor(),
-		cfg:       cfg,
+		s3Client:   s3Client,
+		db:         db,
+		processor:  fileprocessor.NewFileProcessor(),
+		ragService: ragService,
+		cfg:        cfg,
 	}
 }
 
@@ -81,10 +85,19 @@ func (d *DocumentService) UploadDocument(userID string, file *multipart.FileHead
 		return nil, fmt.Errorf("failed to save document metadata: %w", err)
 	}
 
+	// Automatically trigger processing in background
+	go func() {
+		if err := d.ProcessDocument(userID, document.DocumentID); err != nil {
+			// Log error but don't fail the upload
+			// The document will be marked as failed and can be retried
+			fmt.Printf("Failed to auto-process document %s: %v\n", document.DocumentID, err)
+		}
+	}()
+
 	return &models.DocumentUploadResponse{
 		Document: document,
 		Status:   models.StatusUploaded,
-		Message:  "Document uploaded successfully",
+		Message:  "Document uploaded successfully and processing started",
 	}, nil
 }
 
@@ -125,6 +138,14 @@ func (d *DocumentService) DeleteDocument(userID, documentID string) error {
 		return fmt.Errorf("failed to get document: %w", err)
 	}
 
+	// Delete document vectors from Pinecone if it was indexed
+	if document.IndexedInPinecone {
+		if err := d.ragService.DeleteDocumentVectors(context.Background(), userID, documentID); err != nil {
+			// Log error but continue with deletion
+			fmt.Printf("Failed to delete document vectors from Pinecone: %v\n", err)
+		}
+	}
+
 	// Delete from S3
 	if err := d.s3Client.DeleteFile(document.S3Key); err != nil {
 		// Log error but continue with database deletion
@@ -145,6 +166,11 @@ func (d *DocumentService) ProcessDocument(userID, documentID string) error {
 	document, err := d.db.GetDocument(userID, documentID)
 	if err != nil {
 		return fmt.Errorf("failed to get document: %w", err)
+	}
+
+	// Check if already processed
+	if document.Status == models.StatusProcessed {
+		return nil
 	}
 
 	// Mark as processing
@@ -170,7 +196,26 @@ func (d *DocumentService) ProcessDocument(userID, documentID string) error {
 	}
 
 	// Create chunks
-	chunks := d.processor.ChunkText(text, d.cfg.ChunkSize, d.cfg.ChunkOverlap)
+	chunkTexts := d.processor.ChunkText(text, d.cfg.ChunkSize, d.cfg.ChunkOverlap)
+
+	// Convert to DocumentChunk objects with metadata
+	var chunks []models.DocumentChunk
+	for i, chunkText := range chunkTexts {
+		chunk := models.NewDocumentChunk(documentID, userID, chunkText, i)
+		// Add document metadata to chunk for better retrieval
+		chunk.SetMetadata("document_title", document.Title)
+		chunk.SetMetadata("document_category", document.Category)
+		chunk.SetMetadata("document_file_type", document.FileType)
+		chunk.SetMetadata("upload_time", document.UploadTime.Format(time.RFC3339))
+		chunks = append(chunks, *chunk)
+	}
+
+	// Index chunks in Pinecone
+	if err := d.ragService.ProcessDocumentChunks(userID, documentID, chunks); err != nil {
+		document.MarkAsFailed("Failed to index document in vector database")
+		d.db.UpdateDocument(document)
+		return fmt.Errorf("failed to index document chunks: %w", err)
+	}
 
 	// Mark as processed
 	document.MarkAsProcessed(len(chunks))
@@ -179,6 +224,24 @@ func (d *DocumentService) ProcessDocument(userID, documentID string) error {
 	}
 
 	return nil
+}
+
+// RetryProcessDocument retries processing for a failed document
+func (d *DocumentService) RetryProcessDocument(userID, documentID string) error {
+	// Get document
+	document, err := d.db.GetDocument(userID, documentID)
+	if err != nil {
+		return fmt.Errorf("failed to get document: %w", err)
+	}
+
+	// Check if document can be retried
+	if !document.CanRetryProcessing() {
+		return fmt.Errorf("document cannot be retried: status=%s, attempts=%d", document.Status, document.ProcessingAttempts)
+	}
+
+	// Reset error message and process
+	document.ErrorMessage = ""
+	return d.ProcessDocument(userID, documentID)
 }
 
 // GetDocumentContent retrieves the content of a document

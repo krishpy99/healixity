@@ -12,17 +12,19 @@ import (
 
 // RAGService handles retrieval-augmented generation operations
 type RAGService struct {
-	vectorDB  *vectordb.PineconeClient
-	llmClient ai.LLMClient
-	cfg       *config.Config
+	vectorDB        *vectordb.PineconeClient
+	llmClient       ai.LLMClient
+	embeddingClient ai.EmbeddingClient
+	cfg             *config.Config
 }
 
 // NewRAGService creates a new RAG service
-func NewRAGService(vectorDB *vectordb.PineconeClient, llmClient ai.LLMClient, cfg *config.Config) *RAGService {
+func NewRAGService(vectorDB *vectordb.PineconeClient, llmClient ai.LLMClient, embeddingClient ai.EmbeddingClient, cfg *config.Config) *RAGService {
 	return &RAGService{
-		vectorDB:  vectorDB,
-		llmClient: llmClient,
-		cfg:       cfg,
+		vectorDB:        vectorDB,
+		llmClient:       llmClient,
+		embeddingClient: embeddingClient,
+		cfg:             cfg,
 	}
 }
 
@@ -34,7 +36,7 @@ func (r *RAGService) ProcessDocumentChunks(userID, documentID string, chunks []m
 	var vectors []vectordb.Vector
 	for _, chunk := range chunks {
 		// Generate embedding
-		embedding, err := r.llmClient.GenerateEmbedding(ctx, chunk.Content)
+		embedding, err := r.embeddingClient.GenerateEmbedding(ctx, chunk.Content)
 		if err != nil {
 			return fmt.Errorf("failed to generate embedding for chunk %s: %w", chunk.ChunkID, err)
 		}
@@ -56,7 +58,7 @@ func (r *RAGService) ProcessDocumentChunks(userID, documentID string, chunks []m
 // QueryRelevantContext queries for relevant document context
 func (r *RAGService) QueryRelevantContext(ctx context.Context, userID, query string, topK int) ([]models.RAGContext, error) {
 	// Generate embedding for the query
-	queryEmbedding, err := r.llmClient.GenerateEmbedding(ctx, query)
+	queryEmbedding, err := r.embeddingClient.GenerateEmbedding(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate query embedding: %w", err)
 	}
@@ -88,7 +90,7 @@ func (r *RAGService) QueryRelevantContext(ctx context.Context, userID, query str
 // QueryDocumentContext queries for context within specific documents
 func (r *RAGService) QueryDocumentContext(ctx context.Context, userID string, documentIDs []string, query string, topK int) ([]models.RAGContext, error) {
 	// Generate embedding for the query
-	queryEmbedding, err := r.llmClient.GenerateEmbedding(ctx, query)
+	queryEmbedding, err := r.embeddingClient.GenerateEmbedding(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate query embedding: %w", err)
 	}

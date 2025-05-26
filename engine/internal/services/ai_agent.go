@@ -55,6 +55,11 @@ func (a *AIAgent) ProcessQuery(ctx context.Context, userID string, query string)
 	return enrichedResponse, nil
 }
 
+// QueryDocuments allows the AI to search through user documents
+func (a *AIAgent) QueryDocuments(ctx context.Context, userID, query string, limit int) ([]models.RAGContext, error) {
+	return a.ragService.QueryRelevantContext(ctx, userID, query, limit)
+}
+
 // analyzeQueryIntent determines the type and intent of the user's query
 func (a *AIAgent) analyzeQueryIntent(query string) models.QueryIntent {
 	queryLower := strings.ToLower(query)

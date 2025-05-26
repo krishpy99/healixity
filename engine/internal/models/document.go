@@ -11,24 +11,27 @@ import (
 
 // Document represents a health document stored in the system
 type Document struct {
-	UserID       string    `json:"user_id" dynamodbav:"user_id"`
-	SortKey      string    `json:"sort_key" dynamodbav:"sort_key"` // category#timestamp
-	DocumentID   string    `json:"document_id" dynamodbav:"document_id"`
-	Title        string    `json:"title" dynamodbav:"title"`
-	FileName     string    `json:"file_name" dynamodbav:"file_name"`
-	FileType     string    `json:"file_type" dynamodbav:"file_type"`
-	ContentType  string    `json:"content_type" dynamodbav:"content_type"`
-	FileSize     int64     `json:"file_size" dynamodbav:"file_size"`
-	S3Key        string    `json:"s3_key" dynamodbav:"s3_key"`
-	S3URL        string    `json:"s3_url,omitempty" dynamodbav:"s3_url,omitempty"`
-	UploadTime   time.Time `json:"upload_time" dynamodbav:"upload_time"`
-	ProcessedAt  time.Time `json:"processed_at,omitempty" dynamodbav:"processed_at,omitempty"`
-	Status       string    `json:"status" dynamodbav:"status"` // "uploaded", "processing", "processed", "failed"
-	ChunkCount   int       `json:"chunk_count" dynamodbav:"chunk_count"`
-	Tags         []string  `json:"tags,omitempty" dynamodbav:"tags,omitempty"`
-	Category     string    `json:"category" dynamodbav:"category"`
-	Description  string    `json:"description,omitempty" dynamodbav:"description,omitempty"`
-	ErrorMessage string    `json:"error_message,omitempty" dynamodbav:"error_message,omitempty"`
+	UserID                string    `json:"user_id" dynamodbav:"user_id"`
+	SortKey               string    `json:"sort_key" dynamodbav:"sort_key"` // category#timestamp
+	DocumentID            string    `json:"document_id" dynamodbav:"document_id"`
+	Title                 string    `json:"title" dynamodbav:"title"`
+	FileName              string    `json:"file_name" dynamodbav:"file_name"`
+	FileType              string    `json:"file_type" dynamodbav:"file_type"`
+	ContentType           string    `json:"content_type" dynamodbav:"content_type"`
+	FileSize              int64     `json:"file_size" dynamodbav:"file_size"`
+	S3Key                 string    `json:"s3_key" dynamodbav:"s3_key"`
+	S3URL                 string    `json:"s3_url,omitempty" dynamodbav:"s3_url,omitempty"`
+	UploadTime            time.Time `json:"upload_time" dynamodbav:"upload_time"`
+	ProcessedAt           time.Time `json:"processed_at,omitempty" dynamodbav:"processed_at,omitempty"`
+	Status                string    `json:"status" dynamodbav:"status"` // "uploaded", "processing", "processed", "failed"
+	ChunkCount            int       `json:"chunk_count" dynamodbav:"chunk_count"`
+	Tags                  []string  `json:"tags,omitempty" dynamodbav:"tags,omitempty"`
+	Category              string    `json:"category" dynamodbav:"category"`
+	Description           string    `json:"description,omitempty" dynamodbav:"description,omitempty"`
+	ErrorMessage          string    `json:"error_message,omitempty" dynamodbav:"error_message,omitempty"`
+	ProcessingAttempts    int       `json:"processing_attempts" dynamodbav:"processing_attempts"`
+	LastProcessingAttempt time.Time `json:"last_processing_attempt,omitempty" dynamodbav:"last_processing_attempt,omitempty"`
+	IndexedInPinecone     bool      `json:"indexed_in_pinecone" dynamodbav:"indexed_in_pinecone"`
 }
 
 // DocumentChunk represents a chunk of a document for vector storage
@@ -154,6 +157,8 @@ func (d *Document) IsProcessed() bool {
 // MarkAsProcessing marks the document as being processed
 func (d *Document) MarkAsProcessing() {
 	d.Status = StatusProcessing
+	d.ProcessingAttempts++
+	d.LastProcessingAttempt = time.Now()
 }
 
 // MarkAsProcessed marks the document as processed
@@ -161,12 +166,25 @@ func (d *Document) MarkAsProcessed(chunkCount int) {
 	d.Status = StatusProcessed
 	d.ChunkCount = chunkCount
 	d.ProcessedAt = time.Now()
+	d.IndexedInPinecone = true
 }
 
 // MarkAsFailed marks the document as failed to process
 func (d *Document) MarkAsFailed(errorMessage string) {
 	d.Status = StatusFailed
 	d.ErrorMessage = errorMessage
+	d.ProcessingAttempts++
+	d.LastProcessingAttempt = time.Now()
+}
+
+// CanRetryProcessing checks if the document can be retried for processing
+func (d *Document) CanRetryProcessing() bool {
+	return d.Status == StatusFailed && d.ProcessingAttempts < 3
+}
+
+// ShouldAutoProcess checks if the document should be automatically processed
+func (d *Document) ShouldAutoProcess() bool {
+	return d.Status == StatusUploaded && d.ProcessingAttempts == 0
 }
 
 // GetMetadata returns metadata for the document chunk

@@ -15,6 +15,9 @@ type Config struct {
 	JWTSecret   string
 	TestMode    bool // Add test mode flag
 
+	// Logging configuration
+	LogMode string // PRINT, WRITE, or NONE
+
 	// Clerk configuration
 	ClerkSecretKey      string
 	ClerkPublishableKey string
@@ -36,6 +39,7 @@ type Config struct {
 
 	// LLM configuration
 	SonarAPIKey    string
+	OpenAIAPIKey   string
 	LLMProvider    string
 	EmbeddingModel string
 	ChatModel      string
@@ -61,6 +65,9 @@ func Load() (*Config, error) {
 		JWTSecret:   getEnv("JWT_SECRET", "your-secret-key"),
 		TestMode:    getEnvAsBool("TEST_MODE", false), // Add test mode configuration
 
+		// Logging configuration
+		LogMode: getEnv("LOG_MODE", "PRINT"),
+
 		// Clerk configuration
 		ClerkSecretKey:      getEnv("CLERK_SECRET_KEY", ""),
 		ClerkPublishableKey: getEnv("CLERK_PUBLISHABLE_KEY", ""),
@@ -82,6 +89,7 @@ func Load() (*Config, error) {
 
 		// LLM configuration
 		SonarAPIKey:    getEnv("SONAR_API_KEY", ""),
+		OpenAIAPIKey:   getEnv("OPENAI_API_KEY", ""),
 		LLMProvider:    getEnv("LLM_PROVIDER", "sonar"),
 		EmbeddingModel: getEnv("EMBEDDING_MODEL", "text-embedding-ada-002"),
 		ChatModel:      getEnv("CHAT_MODEL", "sonar"),

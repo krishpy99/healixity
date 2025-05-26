@@ -373,6 +373,22 @@ export const documentApi = {
       method: 'POST',
     }),
 
+  // Retry document processing
+  retryProcessDocument: (id: string): Promise<{ document_id: string; status: string }> =>
+    apiRequest(`/api/documents/${id}/retry`, {
+      method: 'POST',
+    }),
+
+  // Query documents for AI
+  queryDocuments: (params: {
+    query: string;
+    limit?: number;
+  }): Promise<{ query: string; results: any[]; count: number }> =>
+    apiRequest('/api/documents/query', {
+      method: 'POST',
+      body: JSON.stringify(params),
+    }),
+
   // Search documents
   searchDocuments: (params: {
     query: string;
@@ -450,6 +466,16 @@ export const chatApi = {
     const query = queryParams.toString();
     return apiRequest(`/api/chat/history${query ? `?${query}` : ''}`);
   },
+
+  // Query documents (for AI use)
+  queryDocuments: (params: {
+    query: string;
+    limit?: number;
+  }): Promise<{ query: string; results: any[]; count: number }> =>
+    apiRequest('/api/documents/query', {
+      method: 'POST',
+      body: JSON.stringify(params),
+    }),
 };
 
 // Auth API
