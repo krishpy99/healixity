@@ -453,9 +453,9 @@ const MetricCard = ({
         className="shadow-md h-full cursor-pointer transition-all hover:shadow-lg hover:scale-[1.02]" 
         onClick={() => setIsModalOpen(true)}
       >
-        <CardHeader className="pb-2">
+        <CardHeader className="pb-2 pt-2">
           <div className="flex justify-between items-start">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
+            <CardTitle className="text-md font-medium text-muted-foreground">
               {safeTitle}
             </CardTitle>
             <div className="flex items-center gap-1">
@@ -463,9 +463,9 @@ const MetricCard = ({
             </div>
           </div>
         </CardHeader>
-        <CardContent className="pb-2">
+        <CardContent className="pb-2 pt-1">
           <div className="flex items-baseline gap-1">
-            <span className="text-2xl font-bold">{safeValue}</span>
+            <span className="text-xl font-bold">{safeValue}</span>
             {unit && <span className="text-sm text-muted-foreground">{unit}</span>}
           </div>
           {safeStatusText && safeStatusText !== "-" && safeStatusText !== "No status" && (
@@ -478,8 +478,8 @@ const MetricCard = ({
           )}
         </CardContent>
         <Separator />
-        <CardFooter className="pt-2 pb-1 px-2">
-          <div className="w-full h-16">
+        <CardFooter className="pt-2 pb-2 px-2">
+          <div className="w-full h-14">
             {typeof window !== "undefined" && (
               hasData ? (
                 <Chart

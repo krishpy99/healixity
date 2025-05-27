@@ -24,6 +24,27 @@ export function useChatMessages() {
     error: null
   });
 
+  // Load messages from localStorage on mount
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('chatMessages');
+      if (stored) {
+        try {
+          setChatState(prev => ({ ...prev, messages: JSON.parse(stored) }));
+        } catch {
+          console.warn('Failed to parse stored chat messages');
+        }
+      }
+    }
+  }, []);
+
+  // Persist messages to localStorage whenever they change
+  useEffect(() => {
+    if (typeof window !== 'undefined' && chatState.messages.length > 0) {
+      localStorage.setItem('chatMessages', JSON.stringify(chatState.messages));
+    }
+  }, [chatState.messages]);
+
   const addMessage = useCallback((message: ChatState['messages'][0]) => {
     setChatState(prev => ({
       ...prev,
@@ -123,6 +144,10 @@ export function useChatMessages() {
       messages: [],
       error: null
     }));
+    // Remove persisted messages
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('chatMessages');
+    }
   };
 
   return {

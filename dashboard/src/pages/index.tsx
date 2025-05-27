@@ -3,7 +3,6 @@ import Head from "next/head";
 import MetricCard from "@/components/MetricCard";
 import ChatBox from "@/components/ChatBox";
 import DocumentUpload from "@/components/DocumentUpload";
-import RecoveryChart from "@/components/RecoveryChart";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { MetricSettingsModal } from "@/components/MetricSettingsModal";
 import { Button } from "@/components/ui/button";
@@ -112,16 +111,16 @@ const METRIC_CONFIG: Record<string, {
 
 export default function Dashboard() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  
+
   // Use our composite hook that combines all dashboard data
-  const { metrics, recoveryChartData, loading, error, reloadSpecificMetric } = useDashboardData();
-  
+  const { metrics, loading, error, reloadSpecificMetric } = useDashboardData();
+
   // Get addMetric function to pass to MetricCard components
   const { addMetric } = useMetrics();
-  
+
   // Use metric settings hook
   const { selectedMetrics, isLoaded: settingsLoaded, saveSettings } = useMetricSettings();
-  
+
   // Create a simplified addMetric function for MetricCard
   const handleAddMetric = async (type: string, value: number): Promise<boolean> => {
     try {
@@ -142,16 +141,16 @@ export default function Dashboard() {
   // Filter metrics based on user selection and available data
   const getVisibleMetrics = () => {
     if (!metrics || !settingsLoaded) return [];
-    
+
     return selectedMetrics
       .map(metricType => {
         const config = METRIC_CONFIG[metricType];
         if (!config) return null;
-        
+
         // Get the metric data using the dataKey
         const metricData = metrics[config.dataKey as keyof typeof metrics];
         if (!metricData) return null;
-        
+
         return {
           metricType,
           config,
@@ -171,105 +170,100 @@ export default function Dashboard() {
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <link rel="icon" href="/favicon.ico" />
       </Head>
-      <div className="min-h-screen bg-background p-4 md:p-6">
-      <div className="mx-auto max-w-7xl space-y-6">
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-semibold text-foreground">Healixity</h1>
-          <div className="flex items-center gap-2">
-            <ThemeToggle />
-            <Button 
-              variant="outline" 
-              size="sm" 
-              className="text-foreground"
-              onClick={() => setIsSettingsOpen(true)}
-            >
-              <Settings className="mr-2 h-4 w-4" />
-              Settings
-            </Button>
-            <Button size="sm">
-              <BarChart className="mr-2 h-4 w-4" />
-              Export Data
-            </Button>
+      <div className="flex flex-col h-screen max-h-screen bg-background p-2 md:p-4 overflow-hidden">
+        <div className="mx-auto max-w-7xl space-y-3 flex-1 flex flex-col overflow-hidden">
+          <div className="flex items-center justify-between py-2">
+            <h1 className="text-2xl font-semibold text-foreground">Healixity</h1>
+            <div className="flex items-center gap-2">
+              <ThemeToggle />
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-foreground"
+                onClick={() => setIsSettingsOpen(true)}
+              >
+                <Settings className="mr-2 h-4 w-4" />
+                Settings
+              </Button>
+              <Button size="sm">
+                <BarChart className="mr-2 h-4 w-4" />
+                Export Data
+              </Button>
+            </div>
           </div>
+
+          {loading || !settingsLoaded ? (
+            <div className="flex items-center justify-center p-10">
+              <div className="text-center">
+                <div className="animate-spin h-8 w-8 border-2 border-primary border-t-transparent rounded-full mx-auto mb-4"></div>
+                <p>Loading dashboard data...</p>
+              </div>
+            </div>
+          ) : error ? (
+            <div className="bg-red-50 text-red-800 p-4 rounded-md">
+              {error}
+            </div>
+          ) : (
+            /* Main grid layout: 3 columns, metrics & documents on left, chat on right */
+            <div className="flex-1 grid grid-cols-1 md:grid-cols-3 md:grid-rows-2 gap-3 min-h-0 overflow-hidden">
+              {/* Health Metrics (top-left: spans cols 1-2) */}
+              <div className="md:col-start-1 md:col-span-2 md:row-start-1 space-y-2 overflow-hidden">
+                {/* Health Metrics */}
+                {visibleMetrics.length === 0 ? (
+                  <div className="text-center py-12 text-muted-foreground">
+                    <Settings className="h-16 w-16 mx-auto mb-4 opacity-50" />
+                    <h3 className="text-lg font-medium mb-2">No Metrics Selected</h3>
+                    <p className="mb-4">Choose which health metrics to display on your dashboard.</p>
+                    <Button onClick={() => setIsSettingsOpen(true)}>
+                      <Settings className="mr-2 h-4 w-4" />
+                      Open Settings
+                    </Button>
+                  </div>
+                ) : (
+                  <div className={`grid gap-4 ${visibleMetrics.length === 1 ? 'grid-cols-1' :
+                      visibleMetrics.length === 2 ? 'grid-cols-1 md:grid-cols-2' :
+                        visibleMetrics.length <= 4 ? 'grid-cols-2' :
+                          'grid-cols-2 md:grid-cols-3'
+                    }`}>
+                    {visibleMetrics.map(({ metricType, config, data }) => (
+                      <MetricCard
+                        key={metricType}
+                        title={config.title}
+                        value={data.current}
+                        unit={data.unit}
+                        status={data.status}
+                        statusText={data.statusText}
+                        data={data.data}
+                        color={data.color}
+                        icon={config.icon}
+                        onAddMetric={handleAddMetric}
+                        onReloadMetric={reloadSpecificMetric}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Document Upload (bottom-left: spans cols 1-2) */}
+              <div className="md:col-start-1 md:col-span-2 md:row-start-2 overflow-hidden">
+                <DocumentUpload />
+              </div>
+
+              {/* Chat Box (right: spans cols 3, rows 1-2) */}
+              <div className="md:col-start-3 md:row-start-1 md:row-span-2 h-full overflow-hidden">
+                <ChatBox />
+              </div>
+            </div>
+          )}
         </div>
 
-        {loading || !settingsLoaded ? (
-          <div className="flex items-center justify-center p-10">
-            <div className="text-center">
-              <div className="animate-spin h-8 w-8 border-2 border-primary border-t-transparent rounded-full mx-auto mb-4"></div>
-              <p>Loading dashboard data...</p>
-            </div>
-          </div>
-        ) : error ? (
-          <div className="bg-red-50 text-red-800 p-4 rounded-md">
-            {error}
-          </div>
-        ) : (
-          /* Main grid layout */
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
-            {/* Health Metrics */}
-            <div className="md:col-span-6 lg:col-span-8">
-              {visibleMetrics.length === 0 ? (
-                <div className="text-center py-12 text-muted-foreground">
-                  <Settings className="h-16 w-16 mx-auto mb-4 opacity-50" />
-                  <h3 className="text-lg font-medium mb-2">No Metrics Selected</h3>
-                  <p className="mb-4">Choose which health metrics to display on your dashboard.</p>
-                  <Button onClick={() => setIsSettingsOpen(true)}>
-                    <Settings className="mr-2 h-4 w-4" />
-                    Open Settings
-                  </Button>
-                </div>
-              ) : (
-                <div className={`grid gap-4 ${
-                  visibleMetrics.length === 1 ? 'grid-cols-1' :
-                  visibleMetrics.length === 2 ? 'grid-cols-1 md:grid-cols-2' :
-                  visibleMetrics.length <= 4 ? 'grid-cols-2' :
-                  'grid-cols-2 md:grid-cols-3'
-                }`}>
-                  {visibleMetrics.map(({ metricType, config, data }) => (
-                    <MetricCard
-                      key={metricType}
-                      title={config.title}
-                      value={data.current}
-                      unit={data.unit}
-                      status={data.status}
-                      statusText={data.statusText}
-                      data={data.data}
-                      color={data.color}
-                      icon={config.icon}
-                      onAddMetric={handleAddMetric}
-                      onReloadMetric={reloadSpecificMetric}
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Chat Box Component */}
-            <div className="md:col-span-6 lg:col-span-4">
-              <ChatBox />
-            </div>
-
-            {/* Recovery Tracker */}
-            <div className="md:col-span-8">
-              {recoveryChartData && <RecoveryChart data={recoveryChartData} />}
-            </div>
-
-            {/* Document Upload Section */}
-            <div className="md:col-span-4">
-              <DocumentUpload />
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Settings Modal */}
-      <MetricSettingsModal
-        isOpen={isSettingsOpen}
-        onClose={() => setIsSettingsOpen(false)}
-        selectedMetrics={selectedMetrics}
-        onSaveSettings={saveSettings}
-      />
+        {/* Settings Modal */}
+        <MetricSettingsModal
+          isOpen={isSettingsOpen}
+          onClose={() => setIsSettingsOpen(false)}
+          selectedMetrics={selectedMetrics}
+          onSaveSettings={saveSettings}
+        />
       </div>
     </>
   );

@@ -1,12 +1,14 @@
+"use client"
 import React, { useState, useEffect, useRef } from "react";
 import ChatMessage from "@/components/ChatMessage";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Send } from "lucide-react";
+import { Send, Maximize2 } from "lucide-react";
+import { Dialog, DialogTrigger, DialogContent } from "@/components/ui/dialog";
 import { useChatMessages } from "@/hooks";
 
-const ChatBox = () => {
+const ChatBox = ({ showEnlargeButton = true }: { showEnlargeButton?: boolean } = {}) => {
   const { 
     messages, 
     loading, 
@@ -53,17 +55,37 @@ const ChatBox = () => {
   const safeMessages = Array.isArray(messages) ? messages : [];
 
   return (
-    <div className="flex flex-col bg-background border rounded-lg shadow-sm h-[420px]">
-      <div className="p-4 border-b flex items-center justify-between">
-        <h2 className="text-lg font-medium">Health Assistant</h2>
+    <div className="flex flex-col bg-background border rounded-lg shadow-sm h-full min-h-0 max-h-full overflow-hidden">
+      <div className="p-2 border-b flex items-center justify-between">
+        <h2 className="text-lg font-bold">Health Assistant</h2>
         <div className="flex items-center gap-2">
+          {/* Enlarge Chat Button */}
+          {showEnlargeButton && (
+            <Dialog>
+              <DialogTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 px-2 text-xs"
+                >
+                  <Maximize2 className="h-3 w-3 mr-1" />
+                  Enlarge
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="w-[70vw] h-[75vh] max-w-none p-0">
+                <div className="h-full flex flex-col overflow-hidden">
+                  <ChatBox showEnlargeButton={false} />
+                </div>
+              </DialogContent>
+            </Dialog>
+          )}
           {/* Clear messages button */}
           {safeMessages.length > 0 && (
             <Button
               variant="ghost"
               size="sm"
               onClick={clearMessages}
-              className="h-6 px-2 text-xs"
+              className={`h-6 px-2 text-xs ${!showEnlargeButton ? 'mr-10' : ''}`}
             >
               Clear
             </Button>
@@ -71,7 +93,7 @@ const ChatBox = () => {
         </div>
       </div>
       
-      <ScrollArea className="flex-1 p-4" ref={scrollAreaRef}>
+      <ScrollArea className="flex-1 p-2 min-h-0 overflow-hidden" ref={scrollAreaRef}>
         <div className="space-y-4">
           {error && (
             <div className="bg-red-50 border border-red-200 rounded-md p-3">
@@ -105,7 +127,7 @@ const ChatBox = () => {
         </div>
       </ScrollArea>
       
-      <div className="p-4 border-t mt-auto">
+      <div className="p-2 border-t mt-auto">
         <form 
           className="flex gap-2" 
           onSubmit={(e) => {

@@ -139,8 +139,8 @@ const DocumentUpload: React.FC = () => {
 
   // Document row component
   const DocumentRow = ({ doc, showActions = true }: { doc: Document, showActions?: boolean }) => (
-    <div className="flex items-center p-3 border rounded-md bg-muted/30 hover:bg-muted/50 transition-colors">
-      <FileText className={`h-8 w-8 mr-3 flex-shrink-0 ${getFileTypeColor(doc?.content_type)}`} />
+    <div className="flex items-center p-2 border rounded-md bg-muted/30 hover:bg-muted/50 transition-colors min-w-[200px]">
+      <FileText className={`h-6 w-6 mr-2 flex-shrink-0 ${getFileTypeColor(doc?.content_type)}`} />
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium truncate">{doc?.title || 'Untitled Document'}</p>
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -194,14 +194,14 @@ const DocumentUpload: React.FC = () => {
   const safeAllDocuments = Array.isArray(documents) ? documents : [];
 
   return (
-    <Card className="shadow-md h-full">
-      <CardHeader>
+    <Card className="shadow-md h-full overflow-hidden">
+      <CardHeader className="pb-1 pt-3 mt-3 mb-3">
         <CardTitle>Document Upload</CardTitle>
         <CardDescription>
           Upload medical documents for AI analysis and record keeping. Documents are automatically processed and indexed for search.
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-2 p-2 flex-1 overflow-hidden">
         <div className="space-y-4 w-full">
           <form onSubmit={(e) => {
             e.preventDefault();
@@ -301,8 +301,8 @@ const DocumentUpload: React.FC = () => {
           </Alert>
         )}
 
-        <div>
-          <div className="flex items-center justify-between mb-2">
+        <div className="mt-1">
+          <div className="flex items-center justify-between mb-0">
             <h3 className="text-sm font-medium">Recent Documents</h3>
             {safeRecentDocuments.length > 0 && (
               <Dialog open={modalOpen} onOpenChange={setModalOpen}>
@@ -356,19 +356,19 @@ const DocumentUpload: React.FC = () => {
               </Dialog>
             )}
           </div>
-          <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2">
-            {loading ? (
-              <div className="flex justify-center p-4">
-                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-              </div>
-            ) : safeRecentDocuments.length === 0 ? (
-              <p className="text-center text-muted-foreground text-sm py-4">No documents uploaded yet.</p>
-            ) : (
-              safeRecentDocuments.map((doc) => (
-                <DocumentRow key={doc?.document_id || Math.random().toString(36)} doc={doc} />
-              ))
-            )}
-          </div>
+        </div>
+        <div className="flex space-x-2 overflow-x-auto pr-1 py-1">
+          {loading ? (
+            <div className="flex justify-center p-4">
+              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+            </div>
+          ) : safeRecentDocuments.length === 0 ? (
+            <p className="text-center text-muted-foreground text-sm py-4">No documents uploaded yet.</p>
+          ) : (
+            safeRecentDocuments.map((doc) => (
+              <DocumentRow key={doc?.document_id || Math.random().toString(36)} doc={doc} />
+            ))
+          )}
         </div>
       </CardContent>
 
