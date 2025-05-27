@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"context"
 	"net/http"
 	"os"
@@ -219,7 +220,11 @@ func main() {
 				zap.String("port", cfg.Port),
 				zap.String("cert_file", cfg.TLSCertFile),
 				zap.String("key_file", cfg.TLSKeyFile))
+			fmt.Println("In HTTPS server path", cfg.TLSCertFile, cfg.TLSKeyFile)
 			err = srv.ListenAndServeTLS(cfg.TLSCertFile, cfg.TLSKeyFile)
+			if err != nil {
+				fmt.Println("Failed to start server: ", err)
+			}
 		} else {
 			zapLogger.Info("Starting HTTP server",
 				zap.String("port", cfg.Port))
