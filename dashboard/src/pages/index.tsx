@@ -170,8 +170,8 @@ export default function Dashboard() {
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <link rel="icon" href="/favicon.ico" />
       </Head>
-      <div className="flex flex-col h-screen max-h-screen bg-background p-2 md:p-4 overflow-hidden">
-        <div className="mx-auto max-w-7xl space-y-3 flex-1 flex flex-col overflow-hidden">
+      <div className="flex flex-col h-screen bg-background p-2 md:p-4 overflow-hidden">
+        <div className="mx-auto max-w-7xl space-y-3 flex-1 flex flex-col overflow-hidden max-h-[95%]">
           <div className="flex items-center justify-between py-2">
             <h1 className="text-2xl font-semibold text-foreground">Healixity</h1>
             <div className="flex items-center gap-2">

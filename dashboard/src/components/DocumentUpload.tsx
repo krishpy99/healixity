@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { FileInput } from "./ui/file-input";
 import { Button } from "./ui/button";
@@ -6,7 +6,7 @@ import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Alert, AlertDescription } from "./ui/alert";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "./ui/dialog";
-import { Loader2, CheckCircle, FileText, Trash2, Eye, MoreHorizontal, Settings } from "lucide-react";
+import { Loader2, CheckCircle, FileText, Trash2, Eye, MoreHorizontal, Settings, Upload } from "lucide-react";
 import { useDocuments } from "@/hooks";
 import { DocumentUploadRequest } from "@/hooks/types";
 import type { Document } from "@/lib/api";
@@ -14,12 +14,12 @@ import { config } from "@/lib/config";
 import DocumentViewer from "./DocumentViewer";
 
 const DocumentUpload: React.FC = () => {
-  const { 
+  const {
     recentDocuments,
     documents,
-    loading, 
-    uploading, 
-    error, 
+    loading,
+    uploading,
+    error,
     hasMore,
     uploadDocument,
     deleteDocument,
@@ -28,7 +28,7 @@ const DocumentUpload: React.FC = () => {
     fetchAllDocuments,
     loadMore
   } = useDocuments();
-  
+
   const [file, setFile] = useState<File | null>(null);
   const [metadata, setMetadata] = useState<DocumentUploadRequest>({
     title: '',
@@ -37,9 +37,11 @@ const DocumentUpload: React.FC = () => {
   });
   const [uploadSuccess, setUploadSuccess] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
+  const [uploadModalOpen, setUploadModalOpen] = useState(false);
   const [modalLoading, setModalLoading] = useState(false);
   const [viewerOpen, setViewerOpen] = useState(false);
   const [selectedDocumentId, setSelectedDocumentId] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileChange = (selectedFile: File | null) => {
     setFile(selectedFile);
@@ -49,19 +51,55 @@ const DocumentUpload: React.FC = () => {
         ...prev,
         title: prev.title || selectedFile.name.replace(/\.[^/.]+$/, "")
       }));
+      // Open modal after file is selected
+      setUploadModalOpen(true);
     }
     setUploadSuccess(false);
+    
+    // Sync the hidden input with the selected file
+    if (fileInputRef.current && selectedFile) {
+      // Create a new FileList with the selected file
+      const dt = new DataTransfer();
+      dt.items.add(selectedFile);
+      fileInputRef.current.files = dt.files;
+    } else if (fileInputRef.current && !selectedFile) {
+      // Clear the hidden input
+      fileInputRef.current.value = '';
+    }
   };
 
   const handleUpload = async () => {
     if (!file || !metadata.title || !metadata.category) return;
-    
+
     const result = await uploadDocument(file, metadata);
     if (result) {
       setFile(null);
       setMetadata({ title: '', category: '', description: '' });
       setUploadSuccess(true);
-      setTimeout(() => setUploadSuccess(false), 3000);
+      setTimeout(() => {
+        setUploadSuccess(false);
+        setUploadModalOpen(false);
+      }, 2000);
+    }
+  };
+
+  const handleUploadButtonClick = () => {
+    // Directly trigger file picker without opening modal
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+  };
+
+  const handleModalClose = () => {
+    setUploadModalOpen(false);
+    // Reset form when modal closes
+    setFile(null);
+    setMetadata({ title: '', category: '', description: '' });
+    setUploadSuccess(false);
+    
+    // Reset the hidden file input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
     }
   };
 
@@ -139,7 +177,7 @@ const DocumentUpload: React.FC = () => {
 
   // Document row component
   const DocumentRow = ({ doc, showActions = true }: { doc: Document, showActions?: boolean }) => (
-    <div className="flex items-center p-2 border rounded-md bg-muted/30 hover:bg-muted/50 transition-colors min-w-[200px]">
+    <div className="flex items-center p-2 border rounded-md bg-muted/30 hover:bg-muted/50 transition-colors">
       <FileText className={`h-6 w-6 mr-2 flex-shrink-0 ${getFileTypeColor(doc?.content_type)}`} />
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium truncate">{doc?.title || 'Untitled Document'}</p>
@@ -158,8 +196,8 @@ const DocumentUpload: React.FC = () => {
       </div>
       {showActions && (
         <div className="flex items-center gap-1">
-          <Button 
-            variant="ghost" 
+          <Button
+            variant="ghost"
             size="sm"
             onClick={() => handleView(doc.document_id)}
             title="View document"
@@ -167,8 +205,8 @@ const DocumentUpload: React.FC = () => {
             <Eye className="h-3 w-3" />
           </Button>
           {doc?.status === 'failed' && (
-            <Button 
-              variant="ghost" 
+            <Button
+              variant="ghost"
               size="sm"
               onClick={() => handleRetry(doc.document_id)}
               title="Retry processing"
@@ -176,8 +214,8 @@ const DocumentUpload: React.FC = () => {
               <Settings className="h-3 w-3" />
             </Button>
           )}
-          <Button 
-            variant="ghost" 
+          <Button
+            variant="ghost"
             size="sm"
             onClick={() => handleDelete(doc.document_id)}
             title="Delete document"
@@ -202,98 +240,19 @@ const DocumentUpload: React.FC = () => {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-2 p-2 flex-1 overflow-hidden">
-        <div className="space-y-4 w-full">
-          <form onSubmit={(e) => {
-            e.preventDefault();
-            handleUpload();
-          }}>
-            <div className="space-y-3">
-              <div>
-                <FileInput
-                  onFileChange={handleFileChange}
-                  accept={config.documents.allowedTypes.join(',')}
-                  maxSize={config.documents.maxFileSize / (1024 * 1024)} // Convert bytes to MB
-                  showAcceptedTypes={true}
-                  acceptedTypesLabel={`Accepted file types: ${config.documents.allowedTypes.map(type => {
-                    if (type === 'application/pdf') return 'PDF';
-                    if (type === 'text/plain') return 'Text';
-                    if (type === 'text/markdown') return 'Markdown';
-                    return type;
-                  }).join(', ')} • Max size: ${Math.round(config.documents.maxFileSize / (1024 * 1024))}MB`}
-                />
-              </div>
-              
-              {file && (
-                <>
-                  <div>
-                    <Label htmlFor="title">Document Title *</Label>
-                    <Input
-                      id="title"
-                      value={metadata.title}
-                      onChange={(e) => setMetadata(prev => ({ ...prev, title: e.target.value }))}
-                      placeholder="Enter document title"
-                      required
-                    />
-                  </div>
-                  
-                  <div>
-                    <Label htmlFor="category">Category *</Label>
-                    <select 
-                      value={metadata.category} 
-                      onChange={(e) => setMetadata(prev => ({ ...prev, category: e.target.value }))}
-                      className="w-full p-2 border border-gray-300 rounded-md"
-                      required
-                    >
-                      <option value="">Select category</option>
-                      {config.documents.categories.map(category => (
-                        <option key={category} value={category}>
-                          {category.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                        </option>
-                      ))}
-                    </select>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Available categories: {config.documents.categories.map(cat => 
-                        cat.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
-                      ).join(', ')}
-                    </p>
-                  </div>
-                  
-                  <div>
-                    <Label htmlFor="description">Description (Optional)</Label>
-                    <Input
-                      id="description"
-                      value={metadata.description}
-                      onChange={(e) => setMetadata(prev => ({ ...prev, description: e.target.value }))}
-                      placeholder="Brief description of the document"
-                    />
-                  </div>
-                </>
-              )}
-            </div>
-            
-            {file && (
-              <Button 
-                type="submit" 
-                className="w-full mt-4"
-                disabled={!file || !metadata.title || !metadata.category || uploading}
-              >
-                {uploading ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Uploading...
-                  </>
-                ) : "Upload Document"}
-              </Button>
-            )}
-          </form>
+        <div className="flex items-center gap-2">
+          {/* Hidden file input for direct triggering */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept={config.documents.allowedTypes.join(',')}
+            onChange={(e) => {
+              const selectedFile = e.target.files ? e.target.files[0] : null;
+              handleFileChange(selectedFile);
+            }}
+            className="hidden"
+          />
         </div>
-
-        {uploadSuccess && (
-          <Alert className="bg-green-50 border-green-200 text-green-800">
-            <CheckCircle className="h-4 w-4 text-green-600" />
-            <AlertDescription>Document uploaded successfully! Processing will begin automatically.</AlertDescription>
-          </Alert>
-        )}
 
         {error && (
           <Alert className="bg-red-50 border-red-200 text-red-800">
@@ -301,15 +260,24 @@ const DocumentUpload: React.FC = () => {
           </Alert>
         )}
 
-        <div className="mt-1">
+        <div className="mt-1 pl-4 pr-4">
           <div className="flex items-center justify-between mb-0">
-            <h3 className="text-sm font-medium">Recent Documents</h3>
+            <div className="flex flex-row w-full justify-between mr-3">
+              <h3 className="text-sm font-medium">Recent Documents</h3>
+              <Button
+                size="sm"
+                onClick={handleUploadButtonClick}
+              >
+                <Upload className="mr-2 h-4 w-4" />
+                Upload Document
+              </Button>
+            </div>
             {safeRecentDocuments.length > 0 && (
               <Dialog open={modalOpen} onOpenChange={setModalOpen}>
                 <DialogTrigger asChild>
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
+                  <Button
+                    variant="ghost"
+                    size="sm"
                     onClick={handleViewMore}
                     className="text-xs"
                   >
@@ -335,8 +303,8 @@ const DocumentUpload: React.FC = () => {
                         ))}
                         {hasMore && (
                           <div className="flex justify-center pt-4">
-                            <Button 
-                              variant="outline" 
+                            <Button
+                              variant="outline"
                               onClick={loadMore}
                               disabled={loading}
                             >
@@ -357,20 +325,158 @@ const DocumentUpload: React.FC = () => {
             )}
           </div>
         </div>
-        <div className="flex space-x-2 overflow-x-auto pr-1 py-1">
+        <div className="p-4">
           {loading ? (
             <div className="flex justify-center p-4">
               <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
             </div>
           ) : safeRecentDocuments.length === 0 ? (
-            <p className="text-center text-muted-foreground text-sm py-4">No documents uploaded yet.</p>
+            <p className="text-center text-muted-foreground text-sm p-4">No documents uploaded yet.</p>
           ) : (
-            safeRecentDocuments.map((doc) => (
-              <DocumentRow key={doc?.document_id || Math.random().toString(36)} doc={doc} />
-            ))
+            <div className="grid grid-cols-2 gap-3">
+              {safeRecentDocuments.slice(0, 4).map((doc) => (
+                <DocumentRow key={doc?.document_id || Math.random().toString(36)} doc={doc} />
+              ))}
+            </div>
           )}
         </div>
       </CardContent>
+
+      {/* Upload Modal */}
+      <Dialog open={uploadModalOpen} onOpenChange={(open) => {
+        if (!open) {
+          handleModalClose();
+        } else {
+          setUploadModalOpen(true);
+        }
+      }}>
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Upload Document</DialogTitle>
+          </DialogHeader>
+
+          <form onSubmit={(e) => {
+            e.preventDefault();
+            handleUpload();
+          }} className="space-y-4">
+            <div>
+              {/* Accepted file types info */}
+              <div className="mb-3 p-3 bg-muted/50 rounded-md">
+                <p className="text-xs text-muted-foreground">
+                  <strong>Accepted file types:</strong> {config.documents.allowedTypes.map(type => {
+                    if (type === 'application/pdf') return 'PDF';
+                    if (type === 'text/plain') return 'Text';
+                    if (type === 'text/markdown') return 'Markdown';
+                    return type;
+                  }).join(', ')}
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  <strong>Max size:</strong> {Math.round(config.documents.maxFileSize / (1024 * 1024))}MB
+                </p>
+              </div>
+
+              <FileInput
+                onFileChange={handleFileChange}
+                accept={config.documents.allowedTypes.join(',')}
+                maxSize={config.documents.maxFileSize / (1024 * 1024)}
+                showAcceptedTypes={false}
+              />
+
+              {/* Selected file display */}
+              {file && (
+                <div className="mt-3 p-2 bg-green-50 border border-green-200 rounded-md">
+                  <p className="text-sm text-green-800">
+                    <strong>Selected file:</strong> {file.name}
+                  </p>
+                  <p className="text-xs text-green-600 mt-1">
+                    Size: {(file.size / (1024 * 1024)).toFixed(2)} MB
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {file && (
+              <>
+                <div>
+                  <Label htmlFor="modal-title">Document Title *</Label>
+                  <Input
+                    id="modal-title"
+                    value={metadata.title}
+                    onChange={(e) => setMetadata(prev => ({ ...prev, title: e.target.value }))}
+                    placeholder="Enter document title"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="modal-category">Category *</Label>
+                  <select
+                    id="modal-category"
+                    value={metadata.category}
+                    onChange={(e) => setMetadata(prev => ({ ...prev, category: e.target.value }))}
+                    className="w-full p-2 border border-gray-300 rounded-md"
+                    required
+                  >
+                    <option value="">Select category</option>
+                    {config.documents.categories.map(category => (
+                      <option key={category} value={category}>
+                        {category.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Available categories: {config.documents.categories.map(cat =>
+                      cat.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
+                    ).join(', ')}
+                  </p>
+                </div>
+
+                <div>
+                  <Label htmlFor="modal-description">Description (Optional)</Label>
+                  <Input
+                    id="modal-description"
+                    value={metadata.description}
+                    onChange={(e) => setMetadata(prev => ({ ...prev, description: e.target.value }))}
+                    placeholder="Brief description of the document"
+                  />
+                </div>
+              </>
+            )}
+
+            {uploadSuccess && (
+              <Alert className="bg-green-50 border-green-200 text-green-800">
+                <CheckCircle className="h-4 w-4 text-green-600" />
+                <AlertDescription>Document uploaded successfully! Processing will begin automatically.</AlertDescription>
+              </Alert>
+            )}
+
+            {file && (
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleModalClose}
+                  className="flex-1"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  className="flex-1"
+                  disabled={!file || !metadata.title || !metadata.category || uploading}
+                >
+                  {uploading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Uploading...
+                    </>
+                  ) : "Upload Document"}
+                </Button>
+              </div>
+            )}
+          </form>
+        </DialogContent>
+      </Dialog>
 
       {/* Document Viewer Modal */}
       <DocumentViewer

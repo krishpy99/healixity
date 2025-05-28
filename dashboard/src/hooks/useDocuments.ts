@@ -26,14 +26,14 @@ export function useDocuments() {
     hasMore: false
   });
 
-  // Fetch recent documents (top 5)
+  // Fetch recent documents (top 4)
   const fetchRecentDocuments = useCallback(async () => {
     try {
       console.log('🔄 useDocuments: Fetching recent documents...');
       setState(prev => ({ ...prev, loading: true, error: null }));
       
       const response = await api.documents.listDocuments({
-        limit: 5
+        limit: 4
       });
       console.log('✅ useDocuments: Recent documents fetched successfully', { count: response.documents ? response.documents.length : 0 });
 

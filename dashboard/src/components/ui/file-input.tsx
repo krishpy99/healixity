@@ -73,7 +73,7 @@ export function FileInput({
         />
         <div className="border border-input bg-background rounded-md px-3 py-2 text-sm flex items-center overflow-hidden hover:bg-muted/50 transition-colors cursor-pointer">
           <span className="truncate flex-1 mr-2" title={selectedFile?.name}>
-            {selectedFile ? formatFileName(selectedFile.name) : "Choose file..."}
+            {selectedFile ? formatFileName(selectedFile.name) : "Choose a different file..."}
           </span>
           {selectedFile && (
             <Button
