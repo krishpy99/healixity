@@ -67,7 +67,7 @@ The system is composed of two main parts:
     *   Handles document processing, including text extraction from PDFs.
 
 ```
-┌─────────────────┐      HTTP/WebSocket      ┌──────────────────┐
+┌─────────────────┐      HTTP/WebSocket     ┌──────────────────┐
 │   Dashboard     │ ◄─────────────────────► │   Health Engine  │
 │ (Next.js/React) │                         │   (Go/Gin)       │
 └─────────────────┘                         └──────────────────┘
