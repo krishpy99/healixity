@@ -170,9 +170,10 @@ export default function Dashboard() {
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <link rel="icon" href="/favicon.ico" />
       </Head>
-      <div className="flex flex-col h-screen bg-background p-2 md:p-4 overflow-hidden">
-        <div className="mx-auto max-w-7xl space-y-3 flex-1 flex flex-col overflow-hidden max-h-[95%]">
-          <div className="flex items-center justify-between py-2">
+      <div className="flex flex-col min-h-screen lg:h-screen bg-background p-2 md:p-4">
+        <div className="mx-auto max-w-7xl w-full h-full flex flex-col">
+          {/* Header */}
+          <div className="flex items-center justify-between py-2 mb-3">
             <h1 className="text-2xl font-semibold text-foreground">Healixity</h1>
             <div className="flex items-center gap-2">
               <ThemeToggle />
@@ -193,7 +194,7 @@ export default function Dashboard() {
           </div>
 
           {loading || !settingsLoaded ? (
-            <div className="flex items-center justify-center p-10">
+            <div className="flex items-center justify-center flex-1">
               <div className="text-center">
                 <div className="animate-spin h-8 w-8 border-2 border-primary border-t-transparent rounded-full mx-auto mb-4"></div>
                 <p>Loading dashboard data...</p>
@@ -204,53 +205,54 @@ export default function Dashboard() {
               {error}
             </div>
           ) : (
-            /* Main grid layout: 3 columns, metrics & documents on left, chat on right */
-            <div className="flex-1 grid grid-cols-1 md:grid-cols-3 md:grid-rows-2 gap-3 min-h-0 overflow-hidden">
-              {/* Health Metrics (top-left: spans cols 1-2) */}
-              <div className="md:col-start-1 md:col-span-2 md:row-start-1 space-y-2 overflow-hidden">
-                {/* Health Metrics */}
-                {visibleMetrics.length === 0 ? (
-                  <div className="text-center py-12 text-muted-foreground">
-                    <Settings className="h-16 w-16 mx-auto mb-4 opacity-50" />
-                    <h3 className="text-lg font-medium mb-2">No Metrics Selected</h3>
-                    <p className="mb-4">Choose which health metrics to display on your dashboard.</p>
-                    <Button onClick={() => setIsSettingsOpen(true)}>
-                      <Settings className="mr-2 h-4 w-4" />
-                      Open Settings
-                    </Button>
+            /* Main layout: responsive stacking on mobile, 60-40 split on desktop */
+            <div className="flex-1 flex flex-col lg:flex-row gap-4 lg:overflow-hidden">
+              {/* Left side (60% on desktop) - split horizontally 60-40 on desktop, stacked on mobile */}
+              <div className="lg:flex-[6] flex flex-col gap-4 lg:overflow-hidden">
+                {/* Top-left section (60% of left side on desktop) - Metric Cards */}
+                <div className="lg:flex-[6] lg:min-h-0">
+                  <div className="h-full bg-card rounded-lg border p-4 lg:overflow-y-auto">
+                    <h2 className="text-lg font-bold pb-2">Health Metrics</h2>
+                    {visibleMetrics.length === 0 ? (
+                      <div className="text-center py-8 text-muted-foreground">
+                        <Settings className="h-16 w-16 mx-auto mb-4 opacity-50" />
+                        <h3 className="text-lg font-medium mb-2">No Metrics Selected</h3>
+                        <p className="mb-4">Choose which health metrics to display on your dashboard.</p>
+                        <Button onClick={() => setIsSettingsOpen(true)}>
+                          <Settings className="mr-2 h-4 w-4" />
+                          Open Settings
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+                        {visibleMetrics.map(({ metricType, config, data }) => (
+                          <MetricCard
+                            key={metricType}
+                            title={config.title}
+                            value={data.current}
+                            unit={data.unit}
+                            status={data.status}
+                            statusText={data.statusText}
+                            data={data.data}
+                            color={data.color}
+                            icon={config.icon}
+                            onAddMetric={handleAddMetric}
+                            onReloadMetric={reloadSpecificMetric}
+                          />
+                        ))}
+                      </div>
+                    )}
                   </div>
-                ) : (
-                  <div className={`grid gap-4 ${visibleMetrics.length === 1 ? 'grid-cols-1' :
-                      visibleMetrics.length === 2 ? 'grid-cols-1 md:grid-cols-2' :
-                        visibleMetrics.length <= 4 ? 'grid-cols-2' :
-                          'grid-cols-2 md:grid-cols-3'
-                    }`}>
-                    {visibleMetrics.map(({ metricType, config, data }) => (
-                      <MetricCard
-                        key={metricType}
-                        title={config.title}
-                        value={data.current}
-                        unit={data.unit}
-                        status={data.status}
-                        statusText={data.statusText}
-                        data={data.data}
-                        color={data.color}
-                        icon={config.icon}
-                        onAddMetric={handleAddMetric}
-                        onReloadMetric={reloadSpecificMetric}
-                      />
-                    ))}
-                  </div>
-                )}
+                </div>
+
+                {/* Bottom-left section (40% of left side on desktop) - Document Upload */}
+                <div className="lg:flex-[4] lg:min-h-0">
+                  <DocumentUpload />
+                </div>
               </div>
 
-              {/* Document Upload (bottom-left: spans cols 1-2) */}
-              <div className="md:col-start-1 md:col-span-2 md:row-start-2 overflow-hidden">
-                <DocumentUpload />
-              </div>
-
-              {/* Chat Box (right: spans cols 3, rows 1-2) */}
-              <div className="md:col-start-3 md:row-start-1 md:row-span-2 h-full overflow-hidden">
+              {/* Right side (40% on desktop) - Chat Window */}
+              <div className="lg:flex-[4] lg:min-h-0 h-[500px] lg:h-full">
                 <ChatBox />
               </div>
             </div>

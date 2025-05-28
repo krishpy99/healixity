@@ -232,14 +232,14 @@ const DocumentUpload: React.FC = () => {
   const safeAllDocuments = Array.isArray(documents) ? documents : [];
 
   return (
-    <Card className="shadow-md h-full overflow-hidden">
-      <CardHeader className="pb-1 pt-3 mt-3 mb-3">
+    <Card className="shadow-md h-full flex flex-col">
+      <CardHeader className="pb-1 pt-3 mt-3 mb-3 flex-shrink-0">
         <CardTitle>Document Upload</CardTitle>
         <CardDescription>
           Upload medical documents for AI analysis and record keeping. Documents are automatically processed and indexed for search.
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-2 p-2 flex-1 overflow-hidden">
+      <CardContent className="space-y-2 p-2 flex-1 min-h-0 overflow-auto">
         <div className="flex items-center gap-2">
           {/* Hidden file input for direct triggering */}
           <input
@@ -269,7 +269,8 @@ const DocumentUpload: React.FC = () => {
                 onClick={handleUploadButtonClick}
               >
                 <Upload className="mr-2 h-4 w-4" />
-                Upload Document
+                <span className="hidden sm:inline">Upload Document</span>
+                <span className="sm:hidden">Upload</span>
               </Button>
             </div>
             {safeRecentDocuments.length > 0 && (
@@ -333,7 +334,7 @@ const DocumentUpload: React.FC = () => {
           ) : safeRecentDocuments.length === 0 ? (
             <p className="text-center text-muted-foreground text-sm p-4">No documents uploaded yet.</p>
           ) : (
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
               {safeRecentDocuments.slice(0, 4).map((doc) => (
                 <DocumentRow key={doc?.document_id || Math.random().toString(36)} doc={doc} />
               ))}

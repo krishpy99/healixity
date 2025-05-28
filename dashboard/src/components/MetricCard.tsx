@@ -80,16 +80,8 @@ const MetricCard = ({
     };
     return titleMap[title] || title.toLowerCase().replace(/\s+/g, '_');
   };
-
-  // Convert status to appropriate badge variant
-  const getStatusVariant = (status: "normal" | "warning" | "alert") => {
-    if (status === "normal") return "outline";
-    if (status === "warning") return "secondary";
-    if (status === "alert") return "destructive";
-    return "outline";
-  };
-
-  const badgeVariant = getStatusVariant(safeStatus);
+  
+  const badgeVariant = "outline";
 
   // Determine status badge classes based on theme and status
   const getStatusBadgeClass = (status: "normal" | "warning" | "alert") => {

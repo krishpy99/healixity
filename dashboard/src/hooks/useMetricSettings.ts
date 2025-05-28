@@ -3,7 +3,7 @@ import { METRIC_TYPES } from './types';
 
 const STORAGE_KEY = 'pfhealth-metric-settings';
 
-// Default metrics to show (the current 6 metrics)
+// Default metrics to show (exactly 6 metrics)
 const DEFAULT_SELECTED_METRICS = [
   METRIC_TYPES.HEART_RATE,
   METRIC_TYPES.BLOOD_PRESSURE,
@@ -11,7 +11,6 @@ const DEFAULT_SELECTED_METRICS = [
   METRIC_TYPES.BLOOD_OXYGEN_SATURATION,
   METRIC_TYPES.BODY_TEMPERATURE,
   METRIC_TYPES.BLOOD_GLUCOSE,
-  METRIC_TYPES.WEIGHT,
 ];
 
 export interface MetricSettings {
