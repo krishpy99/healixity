@@ -1,9 +1,9 @@
-# pfhealth: AI-Powered Personal Health Dashboard
+# Healixity: AI-Powered Personal Health Dashboard
 
 ## Description
-pfhealth is a comprehensive, full-stack application designed for personal health tracking, document management, and AI-powered health insights. It consists of a Next.js frontend dashboard for user interaction and a powerful Go-based backend engine that handles data processing, API services, and AI capabilities.
+Healixity is a comprehensive, full-stack application designed for personal health tracking, document management, and AI-powered health insights. It consists of a Next.js frontend dashboard for user interaction and a powerful Go-based backend engine that handles data processing, API services, and AI capabilities.
 
-At the heart of its intelligent features, pfhealth leverages the **Sonar API (from Perplexity AI)** to provide advanced AI chat functionalities, offering users personalized insights and answers based on their health data and uploaded documents. The system allows users to monitor various health metrics, securely store and manage health-related documents (PDFs, text files), and interact with an AI health assistant for a better understanding of their well-being.
+At the heart of its intelligent features, Healixity leverages the **Sonar API (from Perplexity AI)** to provide advanced AI chat functionalities, offering users personalized insights and answers based on their health data and uploaded documents. The system allows users to monitor various health metrics, securely store and manage health-related documents (PDFs, text files), and interact with an AI health assistant for a better understanding of their well-being.
 
 **Core Components:**
 *   **Dashboard (Frontend):** A user-friendly web interface built with Next.js, React, and TypeScript, allowing users to view their health data, manage documents, and interact with the AI chat.
@@ -97,7 +97,7 @@ For detailed API integration information, see [`docs/API_INTEGRATION.md`](./docs
 1.  **Clone the repository**:
     ```bash
     git clone <repository-url>
-    cd pfhealth/engine
+    cd healixity/engine
     ```
 2.  **Install dependencies**:
     ```bash
